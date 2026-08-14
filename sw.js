@@ -1,4 +1,4 @@
-const CACHE = "horary-v2";
+const CACHE = "horary-v4";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", e => {
@@ -11,6 +11,8 @@ self.addEventListener("activate", e => {
       .then(() => self.clients.claim())
   );
 });
+
+self.addEventListener("message", e => { if (e.data === "skip") self.skipWaiting(); });
 
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;

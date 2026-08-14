@@ -91,7 +91,10 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 .datewrap{position:relative;display:flex;gap:8px}
 .datewrap input#date{flex:1}
 .datewrap button#cal{flex:0 0 auto;width:52px;padding:0;font-size:18px;line-height:1}
-#dpick{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none}
+.calbox{position:relative;flex:0 0 52px}
+.calbox button{width:100%}
+#dpick{position:absolute;inset:0;width:100%;height:100%;opacity:0;
+  border:0;padding:0;margin:0;background:transparent;-webkit-appearance:none;appearance:none}
 </style>
 </head>
 <body>
@@ -106,8 +109,8 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 <div class="row">
   <div><label for="date">Дата (ДД.ММ.ГГГГ)</label>
     <div class="datewrap"><input id="date" inputmode="numeric" placeholder="14.08.2026">
-    <button type="button" id="cal" aria-label="Календарь">▦</button>
-    <input type="date" id="dpick" tabindex="-1" aria-hidden="true"></div></div>
+    <span class="calbox"><button type="button" id="cal" aria-label="Календарь">▦</button>
+    <input type="date" id="dpick" aria-label="Выбрать дату"></span></div></div>
   <div><label for="time">Время, 24 ч (ЧЧ:ММ)</label><input id="time" inputmode="numeric" placeholder="13:37"></div>
 </div>
 <label for="tz">Часовой пояс</label>
@@ -148,7 +151,8 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 
 <div id="out">
   <fieldset style="margin-top:18px"><legend>Карта</legend><div id="wheel"></div></fieldset>
-  <fieldset><legend>Планеты</legend><div class="tw"><div id="tbl"></div></div></fieldset>
+  <fieldset><legend>Планеты</legend><div class="tw"><div id="tbl"></div></div>
+    <div class="hint">Достоинства по таблице Птолемея: обитель, экзальтация, триплицитет, терм, фас, изгнание, падение. Термы — Птолемея, фасы — халдейские, триплицитет — по дню и ночи.</div></fieldset>
   <fieldset><legend>Аспекты</legend><div class="tw"><div id="asp"></div></div>
     <div class="hint">Орбы по половинам светил Фроули, только семь планет.</div></fieldset>
   <fieldset><legend>Транссатурновые</legend><div class="tw"><div id="outers"></div></div>
@@ -254,26 +258,33 @@ const RUL=[5,3,2,1,0,2,3,5,4,6,6,4]; // индексы: 0 Sun,1 Moon,2 Merc,3 Ve
 const PIDX={Sun:0,Moon:1,Mercury:2,Venus:3,Mars:5,Jupiter:4,Saturn:6};
 const PN=["Солнце","Луна","Меркурий","Венера","Юпитер","Марс","Сатурн"];
 const EXA={0:0,1:1,4:3,5:9,6:6,2:5,3:11}; // планета -> знак экзальтации
-const TERMS=[
- [[4,6],[3,12],[2,20],[5,25],[6,30]],[[3,8],[2,14],[4,22],[6,27],[5,30]],
- [[2,6],[4,12],[3,17],[5,24],[6,30]],[[5,7],[3,13],[2,19],[4,26],[6,30]],
- [[4,6],[3,11],[6,18],[2,24],[5,30]],[[2,7],[3,17],[4,21],[5,28],[6,30]],
- [[6,6],[2,14],[4,21],[3,28],[5,30]],[[5,7],[3,11],[2,19],[4,24],[6,30]],
- [[4,12],[3,17],[2,21],[6,26],[5,30]],[[2,7],[4,14],[3,22],[6,26],[5,30]],
- [[2,7],[3,13],[4,20],[5,25],[6,30]],[[3,12],[4,16],[2,19],[5,28],[6,30]]];
+const TERMS=[                                  // термы Птолемея (по Фроули)
+ [[4,6],[3,14],[2,21],[5,26],[6,30]],  // Овен
+ [[3,8],[2,15],[4,22],[6,26],[5,30]],  // Телец
+ [[2,7],[4,14],[3,21],[6,25],[5,30]],  // Близнецы
+ [[5,6],[4,13],[2,20],[3,27],[6,30]],  // Рак
+ [[6,6],[2,13],[3,19],[4,25],[5,30]],  // Лев
+ [[2,7],[3,13],[4,18],[6,24],[5,30]],  // Дева
+ [[6,6],[3,11],[4,19],[2,24],[5,30]],  // Весы
+ [[5,6],[4,14],[3,21],[2,27],[6,30]],  // Скорпион
+ [[4,8],[3,14],[2,19],[6,25],[5,30]],  // Стрелец
+ [[3,6],[2,12],[4,19],[5,25],[6,30]],  // Козерог
+ [[6,6],[2,12],[3,20],[4,25],[5,30]],  // Водолей
+ [[3,8],[4,14],[2,20],[5,26],[6,30]]]; // Рыбы
 const FACES=[[5,0,3],[2,1,6],[4,5,0],[3,2,1],[6,4,5],[0,3,2],[1,6,4],[5,0,3],[2,1,6],[4,5,0],[3,2,1],[6,4,5]];
 const TRIP={fire:[0,4,6],earth:[3,1,5],air:[6,2,4],water:[3,5,1]}; // день, ночь, партнёр
 function dignities(pi,lon,dayChart){
-  if(pi===undefined) return "";
+  if(pi===undefined) return [];
   const s=Math.floor(lon/30), deg=lon-s*30, out=[];
+  // порядок как в таблице Птолемея
   if(RUL[s]===pi) out.push(["Обитель","+"]);
   if(EXA[pi]===s) out.push(["Экзальтация","+"]);
+  const el=["fire","earth","air","water"][s%4];
+  if(TRIP[el][dayChart?0:1]===pi) out.push(["Триплицитет","+"]);
+  for(const [p,lim] of TERMS[s]) if(deg<lim){ if(p===pi) out.push(["Терм","+"]); break }
+  if(FACES[s][Math.floor(deg/10)]===pi) out.push(["Фас","+"]);
   if(RUL[(s+6)%12]===pi) out.push(["Изгнание","-"]);
   if(EXA[pi]!==undefined&&(EXA[pi]+6)%12===s) out.push(["Падение","-"]);
-  const el=[ "fire","earth","air","water"][s%4];
-  const tr=TRIP[el]; if(tr[dayChart?0:1]===pi) out.push(["Тригон","+"]);
-  for(const [p,lim] of TERMS[s]) if(deg<lim){ if(p===pi) out.push(["Термы","+"]); break }
-  if(FACES[s][Math.floor(deg/10)]===pi) out.push(["Лик","+"]);
   return out;
 }
 
@@ -673,7 +684,24 @@ document.getElementById("copy").onclick=async()=>{
   try{await navigator.clipboard.writeText(window.__report||"");h.textContent="Скопировано.";}
   catch(e){r.focus();r.select();h.textContent="Текст выделен — скопируйте жестом «Копировать».";}};
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
-  navigator.serviceWorker.register("sw.js").catch(()=>{});
+  navigator.serviceWorker.register("sw.js").then(reg=>{
+    reg.update();
+    setInterval(()=>reg.update(),60000);
+    reg.addEventListener("updatefound",()=>{
+      const nw=reg.installing;
+      if(!nw) return;
+      nw.addEventListener("statechange",()=>{
+        if(nw.state==="installed"&&navigator.serviceWorker.controller) nw.postMessage("skip");
+      });
+    });
+  }).catch(()=>{});
+  let reloaded=false;
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{
+    if(reloaded) return; reloaded=true; location.reload();
+  });
+  document.addEventListener("visibilitychange",()=>{
+    if(!document.hidden) navigator.serviceWorker.getRegistration().then(r=>r&&r.update());
+  });
 }
 
 /* автоформат времени: 1910 -> 19:10 */
@@ -698,25 +726,24 @@ dateEl.addEventListener("input",()=>{
   dateEl.value=out;
 });
 
-/* календарь */
+/* календарь: нативное поле лежит поверх кнопки */
 const pick=document.getElementById("dpick");
 function toPicker(){
   const m=dateEl.value.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
   if(m) pick.value=`${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
 }
+dateEl.addEventListener("change",toPicker);
+pick.addEventListener("focus",toPicker);
 document.getElementById("cal").onclick=()=>{
   toPicker();
-  if(pick.showPicker){try{pick.showPicker();return}catch(e){}}
-  pick.style.pointerEvents="auto"; pick.style.opacity="0.01";
-  pick.style.width="100%"; pick.style.height="48px"; pick.focus(); pick.click();
+  if(pick.showPicker){try{pick.showPicker()}catch(e){pick.focus()}} else pick.focus();
 };
 pick.addEventListener("change",()=>{
   if(!pick.value) return;
   const [Y,M,D]=pick.value.split("-");
   dateEl.value=`${D}.${M}.${Y}`;
-  pick.style.pointerEvents="none"; pick.style.opacity="0";
-  pick.style.width="1px"; pick.style.height="1px";
 });
+toPicker();
 
 setNow();
 showLoc();
