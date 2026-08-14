@@ -87,6 +87,11 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   .stamp{font-size:11px}
   textarea{font-size:13px}
 }
+
+.datewrap{position:relative;display:flex;gap:8px}
+.datewrap input#date{flex:1}
+.datewrap button#cal{flex:0 0 auto;width:52px;padding:0;font-size:18px;line-height:1}
+#dpick{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;border:0;padding:0;pointer-events:none}
 </style>
 </head>
 <body>
@@ -99,7 +104,10 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 <fieldset>
 <legend>Момент</legend>
 <div class="row">
-  <div><label for="date">Дата (ДД.ММ.ГГГГ)</label><input id="date" inputmode="numeric" placeholder="14.08.2026"></div>
+  <div><label for="date">Дата (ДД.ММ.ГГГГ)</label>
+    <div class="datewrap"><input id="date" inputmode="numeric" placeholder="14.08.2026">
+    <button type="button" id="cal" aria-label="Календарь">▦</button>
+    <input type="date" id="dpick" tabindex="-1" aria-hidden="true"></div></div>
   <div><label for="time">Время, 24 ч (ЧЧ:ММ)</label><input id="time" inputmode="numeric" placeholder="13:37"></div>
 </div>
 <label for="tz">Часовой пояс</label>
@@ -378,7 +386,7 @@ function build(){
 
   if(!inRange(d+2451543.5)){perr.textContent="Дата вне диапазона встроенных эфемерид (2022–2032).";return}
   const H=houses(d,ut,co.lat,co.lon), c=H.cusps;
-  const order=["Saturn","Jupiter","Mars","Sun","Venus","Mercury","Moon","Uranus","Neptune","Pluto"];
+  const order=["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Uranus","Neptune","Pluto"];
   const sun=bodyLon("Sun",d);
   const sunHouse=houseOf(sun,c);
   const dayChart=(sunHouse>=7&&sunHouse<=12);
@@ -667,6 +675,49 @@ document.getElementById("copy").onclick=async()=>{
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("sw.js").catch(()=>{});
 }
+
+/* автоформат времени: 1910 -> 19:10 */
+const timeEl=document.getElementById("time");
+timeEl.addEventListener("input",()=>{
+  let v=timeEl.value.replace(/[^0-9]/g,"").slice(0,4);
+  if(v.length>=3) v=v.slice(0,v.length-2)+":"+v.slice(-2);
+  timeEl.value=v;
+});
+timeEl.addEventListener("blur",()=>{
+  const m=timeEl.value.match(/^(\d{1,2}):(\d{2})$/);
+  if(m) timeEl.value=String(m[1]).padStart(2,"0")+":"+m[2];
+});
+
+/* автоформат даты при ручном вводе цифр: 14082026 -> 14.08.2026 */
+const dateEl=document.getElementById("date");
+dateEl.addEventListener("input",()=>{
+  if(/[^0-9.]/.test(dateEl.value)) return;
+  let v=dateEl.value.replace(/[^0-9]/g,"").slice(0,8), out=v;
+  if(v.length>4) out=v.slice(0,2)+"."+v.slice(2,4)+"."+v.slice(4);
+  else if(v.length>2) out=v.slice(0,2)+"."+v.slice(2);
+  dateEl.value=out;
+});
+
+/* календарь */
+const pick=document.getElementById("dpick");
+function toPicker(){
+  const m=dateEl.value.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if(m) pick.value=`${m[3]}-${String(m[2]).padStart(2,"0")}-${String(m[1]).padStart(2,"0")}`;
+}
+document.getElementById("cal").onclick=()=>{
+  toPicker();
+  if(pick.showPicker){try{pick.showPicker();return}catch(e){}}
+  pick.style.pointerEvents="auto"; pick.style.opacity="0.01";
+  pick.style.width="100%"; pick.style.height="48px"; pick.focus(); pick.click();
+};
+pick.addEventListener("change",()=>{
+  if(!pick.value) return;
+  const [Y,M,D]=pick.value.split("-");
+  dateEl.value=`${D}.${M}.${Y}`;
+  pick.style.pointerEvents="none"; pick.style.opacity="0";
+  pick.style.width="1px"; pick.style.height="1px";
+});
+
 setNow();
 showLoc();
 </script>
