@@ -1,0 +1,14 @@
+{
+  "name": "Хорарная карта",
+  "short_name": "Хорар",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12181F",
+  "theme_color": "#12181F",
+  "lang": "ru",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
