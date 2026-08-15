@@ -122,7 +122,15 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   <option value="America/Los_Angeles">America/Los_Angeles</option>
   <option value="Europe/London">Europe/London</option>
   <option value="UTC">UTC</option>
+  <optgroup label="Фиксированное смещение (как задано в Zet)">
+    <option value="FIX-8">GMT-8</option><option value="FIX-7">GMT-7</option>
+    <option value="FIX-6">GMT-6</option><option value="FIX-5">GMT-5</option>
+    <option value="FIX-4">GMT-4</option><option value="FIX+0">GMT+0</option>
+    <option value="FIX+1">GMT+1</option><option value="FIX+2">GMT+2</option>
+    <option value="FIX+3">GMT+3</option><option value="FIX+4">GMT+4</option>
+  </optgroup>
 </select>
+<div class="hint">Пояс города сам учитывает летнее время. Фиксированное смещение — нет; бери его, только если в Zet стоит именно GMT±N.</div>
 <div class="btns"><button id="now">Сейчас</button></div>
 </fieldset>
 
@@ -185,10 +193,10 @@ const atan2d=(y,x)=>norm(Math.atan2(y,x)*DEG);
 const SIGNS=["Овен","Телец","Близнецы","Рак","Лев","Дева","Весы","Скорпион","Стрелец","Козерог","Водолей","Рыбы"];
 const SGL=["♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓"];
 const PGL={Sun:"☉",Moon:"☽",Mercury:"☿",Venus:"♀",Mars:"♂",Jupiter:"♃",Saturn:"♄",
-  Uranus:"♅",Neptune:"♆",Pluto:"♇",Node:"☊",Fortune:"⊗"};
+  Uranus:"♅",Neptune:"♆",Pluto:"♇",Node:"☊",SNode:"☋"};
 const PRU={Sun:"Солнце",Moon:"Луна",Mercury:"Меркурий",Venus:"Венера",Mars:"Марс",
   Jupiter:"Юпитер",Saturn:"Сатурн",Uranus:"Уран",Neptune:"Нептун",Pluto:"Плутон",
-  Node:"Сев. узел (истинный)",Fortune:"Пар. Фортуны"};
+  Node:"Сев. узел",SNode:"Юж. узел"};
 const MOIETY={Sun:7.5,Moon:6,Mercury:3.5,Venus:3.5,Mars:3.5,Jupiter:4.5,Saturn:4.5,
   Uranus:2.5,Neptune:2.5,Pluto:2.5};
 const ASPECTS=[[0,"соединение","☌"],[60,"секстиль","✳"],[90,"квадратура","□"],
@@ -321,6 +329,7 @@ function parseCoords(t){
   return {lat:la, lon:lo};
 }
 function tzOffset(dateUTCguess, zone){
+  if(zone.startsWith("FIX")) return parseFloat(zone.slice(3));
   const dtf=new Intl.DateTimeFormat("en-US",{timeZone:zone,hour12:false,
     year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
   const p={}; for(const x of dtf.formatToParts(dateUTCguess)) p[x.type]=x.value;
@@ -328,6 +337,8 @@ function tzOffset(dateUTCguess, zone){
   return (asUTC-dateUTCguess.getTime())/3600000;
 }
 function localToUTC(y,mo,da,hh,mi,zone){
+  if(zone.startsWith("FIX"))
+    return new Date(Date.UTC(y,mo-1,da,hh,mi)-parseFloat(zone.slice(3))*3600000);
   let guess=new Date(Date.UTC(y,mo-1,da,hh,mi));
   for(let i=0;i<3;i++){const off=tzOffset(guess,zone);
     guess=new Date(Date.UTC(y,mo-1,da,hh,mi)-off*3600000);}
@@ -407,9 +418,8 @@ function build(){
     rows.push({name:n,lon:l,speed:sp/0.02,retro:sp<0});
   }
   const node=bodyLon("Node",d);
-  const moon=rows.find(r=>r.name==="Moon").lon;
-  const fort=norm(dayChart? c[0]+moon-sun : c[0]+sun-moon);
-  const extra=[{name:"Node",lon:node,retro:true,speed:-0.053},{name:"Fortune",lon:fort,speed:0,retro:false}];
+  const extra=[{name:"Node",lon:node,retro:true,speed:-0.053},
+               {name:"SNode",lon:norm(node+180),retro:true,speed:-0.053}];
 
   document.getElementById("wheel").innerHTML=wheel(c,rows.concat(extra));
 
@@ -603,7 +613,15 @@ function download(name,text,type){
 
 /* ---------- события ---------- */
 function setNow(){
-  const zone=document.getElementById("tz").value, now=new Date();
+  let zone=document.getElementById("tz").value; const now=new Date();
+  if(zone.startsWith("FIX")){
+    const off=parseFloat(zone.slice(3)), t=new Date(now.getTime()+off*3600000);
+    document.getElementById("date").value=
+      String(t.getUTCDate()).padStart(2,"0")+"."+String(t.getUTCMonth()+1).padStart(2,"0")+"."+t.getUTCFullYear();
+    document.getElementById("time").value=
+      String(t.getUTCHours()).padStart(2,"0")+":"+String(t.getUTCMinutes()).padStart(2,"0");
+    return;
+  }
   const p={};for(const x of new Intl.DateTimeFormat("en-CA",{timeZone:zone,hour12:false,
     year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"}).formatToParts(now))p[x.type]=x.value;
   document.getElementById("date").value=`${p.day}.${p.month}.${p.year}`;
