@@ -150,7 +150,14 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   <option value="33.2362,-96.8011,America/Chicago" selected>Prosper, TX</option>
   <option value="32.9835,-96.8455,America/Chicago">Даллас (Midway Rd)</option>
   <option value="56.9500,24.1000,Europe/Riga">Рига</option>
+  <optgroup label="Латвия — окрестности Риги">
+    <option value="56.6500,23.7167,Europe/Riga">Елгава</option>
+    <option value="57.1544,24.8600,Europe/Riga">Сигулда</option>
+    <option value="56.4083,24.1917,Europe/Riga">Бауска</option>
+    <option value="57.3119,25.2750,Europe/Riga">Цесис</option>
+  </optgroup>
   <option value="55.7558,37.6173,Europe/Moscow">Москва</option>
+  <option value="saved" id="savedopt" style="display:none">Сохранённое место</option>
   <option value="custom">Свои координаты…</option>
 </select>
 <label for="place">Координаты</label>
@@ -159,6 +166,7 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 <div class="btns">
   <button id="clear">Очистить для вставки</button>
   <button id="geo">Определить</button>
+  <button id="savebtn">Сохранить это место</button>
 </div>
 <div id="perr" class="err"></div>
 <div id="locline" class="hint"></div>
@@ -418,13 +426,13 @@ function buildReport(){
   if(A.length){
     t+="\n\nАНТИСЫ (рассчитанные)\n";
     t+=A.map(x=>`${x.name}: антис ${x.a} (дом ${x.ah})   контрантис ${x.k} (дом ${x.kh})`+
-      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.pt} ${c.nm} ${c.t}, орб ${c.orb}`).join("\n"):"\n    контактов нет")
+      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.pt} ${c.point} — ${c.t} ${c.tpos}, орб ${c.orb}`).join("\n"):"\n    контактов нет")
     ).join("\n");
   }
   if(P.length){
     t+="\n\nАРАБСКИЕ ЧАСТИ (рассчитанные)\n";
     t+=P.map(x=>`Часть ${x.name}: ${x.lon} (дом ${x.house}), диспозитор ${x.disp}`+
-      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.nm} ${c.t}, орб ${c.orb}`).join("\n"):"\n    контактов нет")
+      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.nm} ${c.t} (${c.tpos}), орб ${c.orb}`).join("\n"):"\n    контактов нет")
     ).join("\n");
   }
   return t;
@@ -446,13 +454,12 @@ function contacts(pt, skipName){
   for(const r of CHART.rows){
     if(r.name===skipName) continue;
     const sep=Math.abs(norm(pt-r.lon+180)-180);
-    if(sep<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"соединение",orb:sep});
-    else if(Math.abs(sep-180)<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"оппозиция",orb:Math.abs(sep-180)});
+    if(sep<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"соединение",orb:sep,tlon:r.lon});
+    else if(Math.abs(sep-180)<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"оппозиция",orb:Math.abs(sep-180),tlon:r.lon});
   }
   for(let h=0;h<12;h++){
     const sep=Math.abs(norm(pt-c[h]+180)-180);
-    if(sep<=ANT_ORB) out.push({t:"куспид "+CHART.RN[h],g:"·",nm:"соединение",orb:sep});
-    else if(Math.abs(sep-180)<=ANT_ORB) out.push({t:"куспид "+CHART.RN[h],g:"·",nm:"оппозиция",orb:Math.abs(sep-180)});
+    if(sep<=ANT_ORB) out.push({t:"куспид "+CHART.RN[h],g:"·",nm:"соединение",orb:sep,tlon:c[h]});
   }
   return out.sort((a,b)=>a.orb-b.orb);
 }
@@ -491,21 +498,22 @@ function antisButtons(){
 function showAntis(name){
   const r=CHART.rows.find(x=>x.name===name);
   const a=antisOf(r.lon), k=contraOf(r.lon);
-  const list=(pt,label)=>{
-    const cc=contacts(pt,name);
-    return `<div class="ptbox"><div class="pttitle">${label} ${PRU[name]}</div>`+
-      `<div class="ptval">${fmtName(pt)} · дом ${houseOf(pt,CHART.cusps)}</div>`+
-      (cc.length?`<table><tbody>`+cc.map(x=>
-        `<tr><td class="g">${x.g}</td><td>${x.t}<div class="pk">${x.nm}</div></td>`+
-        `<td>${fmtOrb(x.orb)}</td></tr>`).join("")+`</tbody></table>`
-        :`<div class="pk">контактов в пределах 2° нет</div>`)+`</div>`;
-  };
-  document.getElementById("antis-out").innerHTML=
-    `<div class="tw">`+list(a,"Антис")+list(k,"Контрантис")+`</div>`;
-  const pack=(pt,label)=>contacts(pt,name).map(x=>({pt:label,nm:x.nm,t:x.t,orb:fmtOrb(x.orb)}));
+  const cc=contacts(a,name).map(x=>({...x,
+    via:x.nm==="соединение"?"по антису":"по контрантису",
+    pt:x.nm==="соединение"?a:k}));
+  const head=`<div class="ptbox"><div class="pttitle">Антисы ${PRU[name]}</div>`+
+    `<div class="ptval">антис ${fmtName(a)} · дом ${houseOf(a,CHART.cusps)}</div>`+
+    `<div class="ptval">контрантис ${fmtName(k)} · дом ${houseOf(k,CHART.cusps)}</div>`;
+  const body=cc.length?`<table><thead><tr><th></th><th>Точка</th><th>С чем</th><th>Орб</th></tr></thead><tbody>`+cc.map(x=>
+      `<tr><td class="g">${x.g}</td>`+
+      `<td>${x.via==="по антису"?"антис":"контрантис"}<div class="pk">${fmtName(x.pt)}</div></td>`+
+      `<td>${x.t}<div class="pk">${fmtName(x.tlon)}</div></td>`+
+      `<td>${fmtOrb(x.orb)}</td></tr>`).join("")+`</tbody></table>`
+    :`<div class="pk">контактов в пределах ${ANT_ORB}° нет</div>`;
+  document.getElementById("antis-out").innerHTML=`<div class="tw">`+head+body+`</div></div>`;
   CALC.antis[name]={name:PRU[name], a:fmtName(a), ah:houseOf(a,CHART.cusps),
     k:fmtName(k), kh:houseOf(k,CHART.cusps),
-    cc:pack(a,"антис").concat(pack(k,"контрантис"))};
+    cc:cc.map(x=>({pt:x.via, point:fmtName(x.pt), t:x.t, tpos:fmtName(x.tlon), orb:fmtOrb(x.orb)}))};
   syncExport();
 }
 
@@ -568,12 +576,12 @@ function showPart(id){
     (p.id==="part"?` · Владыка VII: ${C.lord7name}`:"")+
     (p.rev?` · формула ${CHART.day?"дневная":"перевёрнута (ночная карта)"}`:"")+`</div>`+
     (cc.length?`<div class="tw"><table><thead><tr><th></th><th>Контакт</th><th>Орб</th></tr></thead><tbody>`+
-      cc.map(x=>`<tr><td class="g">${x.g}</td><td>${x.t}<div class="pk">${x.nm}</div></td>`+
+      cc.map(x=>`<tr><td class="g">${x.g}</td><td>${x.t}<div class="pk">${fmtName(x.tlon)} · ${x.nm}</div></td>`+
       `<td>${fmtOrb(x.orb)}</td></tr>`).join("")+`</tbody></table></div>`
       :`<div class="pk">соединений и оппозиций в пределах 2° нет</div>`)+
     `<div class="hint">${p.note}</div></div>`;
   CALC.parts[p.id]={name:p.n, lon:fmtName(lon), lonDeg:lon, house:houseOf(lon,CHART.cusps),
-    disp, cc:cc.map(x=>({nm:x.nm,t:x.t,orb:fmtOrb(x.orb)}))};
+    disp, cc:cc.map(x=>({nm:x.nm,t:x.t,tpos:fmtName(x.tlon),orb:fmtOrb(x.orb)}))};
   syncExport();
 }
 document.addEventListener("click",e=>{
@@ -670,6 +678,12 @@ function build(){
   const ut=utc.getUTCHours()+utc.getUTCMinutes()/60+utc.getUTCSeconds()/3600;
 
   if(!inRange(d+2451543.5)){perr.textContent="Дата вне диапазона встроенных эфемерид (2022–2032).";return}
+  if(preset.value!=="custom"&&preset.value!=="saved"){
+    const p=preset.value.split(",");
+    if(Math.abs(+p[0]-co.lat)>0.01||Math.abs(+p[1]-co.lon)>0.01){
+      locLabel="свои координаты"; preset.value="custom"; showLoc();
+    }
+  }
   const H=houses(d,ut,co.lat,co.lon), c=H.cusps;
   const order=["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Uranus","Neptune","Pluto"];
   const sun=bodyLon("Sun",d);
@@ -759,10 +773,7 @@ function build(){
     }
     for(let h=0;h<12;h++){
       const sep=Math.abs(norm(ol-c[h]+180)-180);
-      for(const [a,nm,gl] of [[0,"соединение","☌"],[180,"оппозиция","☍"]]){
-        const orb=Math.abs(sep-a);
-        if(orb<=OUTER_ORB) tr.push({o,gl,nm,who:"куспид "+RN2[h],wg:"·",orb});
-      }
+      if(sep<=OUTER_ORB) tr.push({o,gl:"☌",nm:"соединение",who:"куспид "+RN2[h],wg:"·",orb:sep});
     }
   }
   tr.sort((x,y)=>x.orb-y.orb);
@@ -818,7 +829,6 @@ function build(){
   document.getElementById("antis").innerHTML=antisButtons();
   document.getElementById("parts").innerHTML=partsButtons();
   document.getElementById("out").style.display="block";
-  document.getElementById("out").scrollIntoView({behavior:"smooth",block:"start"});
 
   /* данные для экспорта */
   const L=[];
@@ -874,6 +884,8 @@ function build(){
   };
   document.getElementById("exp").style.display="block";
   document.getElementById("rep").value=buildReport();
+  try{ const o=document.getElementById("out");
+    if(o.scrollIntoView) o.scrollIntoView({behavior:"smooth",block:"start"}); }catch(e){}
 }
 function download(name,text,type){
   const b=new Blob([text],{type:type||"text/plain;charset=utf-8"});
@@ -913,6 +925,37 @@ const ZONE_PLACE={
   "UTC":["51.4779","0.0015","Гринвич"]
 };
 let locLabel="Prosper, TX";
+const SAVE_KEY="horary_saved_place";
+function loadSaved(){
+  try{ return JSON.parse(localStorage.getItem(SAVE_KEY)); }catch(e){ return null; }
+}
+async function reverseGeocode(lat,lon){
+  const url="https://api.bigdatacloud.net/data/reverse-geocode-client?latitude="+
+    lat+"&longitude="+lon+"&localityLanguage=ru";
+  const ctl=new AbortController(), to=setTimeout(()=>ctl.abort(),6000);
+  try{
+    const r=await fetch(url,{signal:ctl.signal});
+    clearTimeout(to);
+    if(!r.ok) return null;
+    const j=await r.json();
+    const city=j.city||j.locality||j.principalSubdivision||"";
+    let street="";
+    const adm=(j.localityInfo&&j.localityInfo.administrative)||[];
+    const inf=(j.localityInfo&&j.localityInfo.informative)||[];
+    const road=inf.find(x=>/road|street|highway/i.test(x.description||""))||
+               inf.find(x=>/Rd|Road|iela|street/i.test(x.name||""));
+    if(road) street=road.name;
+    else if(adm.length) street=(adm[adm.length-1]||{}).name||"";
+    if(!city&&!street) return null;
+    return street&&street!==city?`${city} / ${street}`:city;
+  }catch(e){ clearTimeout(to); return null; }
+}
+
+function refreshSavedOption(){
+  const saved=loadSaved(), opt=document.getElementById("savedopt");
+  if(saved){ opt.style.display=""; opt.textContent=`Сохранённое: ${saved.label} (${saved.lat.toFixed(4)}, ${saved.lon.toFixed(4)})`; }
+  else opt.style.display="none";
+}
 function showLoc(pref){
   const co=parseCoords(placeEl.value);
   locline.textContent=(pref||"Место")+": "+locLabel+" — "+
@@ -928,6 +971,12 @@ tzEl.onchange=()=>{
 };
 preset.onchange=()=>{
   if(preset.value==="custom"){locLabel="свои координаты";placeEl.focus();showLoc();return}
+  if(preset.value==="saved"){
+    const s=loadSaved();
+    if(s){ placeEl.value=s.lat.toFixed(4)+", "+s.lon.toFixed(4); tzEl.value=s.zone;
+      locLabel=s.label; perr.textContent=""; showLoc(); }
+    return;
+  }
   const [la,lo,z]=preset.value.split(",");
   placeEl.value=(+la).toFixed(4)+", "+(+lo).toFixed(4);
   tzEl.value=z; locLabel=preset.options[preset.selectedIndex].textContent;
@@ -945,8 +994,17 @@ placeEl.addEventListener("paste",()=>{setTimeout(()=>{
   preset.value="custom"; locLabel="вставлено из буфера";
   perr.textContent=co?"":"Координаты не распознаны — проверьте текст.";
   showLoc();},50)});
+document.getElementById("savebtn").onclick=()=>{
+  const co=parseCoords(placeEl.value);
+  if(!co){perr.textContent="Сначала введите или определите координаты.";return}
+  const data={lat:co.lat, lon:co.lon, zone:tzEl.value, label:locLabel};
+  try{ localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    perr.textContent="Сохранено."; refreshSavedOption(); }
+  catch(e){ perr.textContent="Не удалось сохранить — недоступно хранилище браузера."; }
+};
+
 document.getElementById("geo").onclick=()=>{
-  const fail="Определение недоступно в этом окне — вставьте координаты вручную или выберите город.";
+  const fail="Не удалось определить место. Проверьте разрешение геолокации для этого сайта в настройках iOS (Настройки → Safari → Геолокация, либо для установленного приложения — в его собственных настройках), либо вставьте координаты вручную.";
   if(!navigator.geolocation){perr.textContent=fail;return}
   perr.textContent="Определяю…";
   let done=false;
@@ -957,8 +1015,12 @@ document.getElementById("geo").onclick=()=>{
       preset.value="custom";
       let z="";try{z=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}
       if(z&&[...tzEl.options].some(o=>o.value===z)) tzEl.value=z;
-      locLabel="определено устройством"+(p.coords.accuracy?" ±"+Math.round(p.coords.accuracy)+" м":"");
-      perr.textContent=""; showLoc("Определено");},
+      const acc=p.coords.accuracy?" ±"+Math.round(p.coords.accuracy)+" м":"";
+      locLabel="определено устройством"+acc;
+      perr.textContent=""; showLoc("Определено");
+      reverseGeocode(p.coords.latitude,p.coords.longitude).then(nm=>{
+        if(nm){ locLabel=nm+acc; showLoc("Определено"); }
+      });},
     ()=>{if(done)return;done=true;clearTimeout(to);perr.textContent=fail},
     {timeout:6000,maximumAge:0});
 };
@@ -1034,6 +1096,11 @@ pick.addEventListener("change",()=>{
 });
 toPicker();
 
+refreshSavedOption();
+{ const s=loadSaved();
+  if(s){ placeEl.value=s.lat.toFixed(4)+", "+s.lon.toFixed(4); tzEl.value=s.zone;
+    locLabel=s.label; preset.value="saved"; }
+}
 setNow();
 showLoc();
 </script>
