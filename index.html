@@ -167,6 +167,8 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
     <div class="hint">По Фроули: как неподвижные звёзды — только соединение и оппозиция с планетами и значимыми куспидами, радиус 2°. Между собой не рассматриваются. Знаками не управляют.</div></fieldset>
   <fieldset><legend>Соединения с куспидами</legend><div class="tw"><div id="cusp-conj"></div></div>
     <div class="hint">Только в пределах одного знака. Куспиды, не относящиеся к вопросу, игнорируются.</div></fieldset>
+  <fieldset><legend>Антисы</legend><div class="tw"><div id="antis"></div></div>
+    <div class="hint">Ось 0° Рака — 0° Козерога. Только соединение и оппозиция, орб до 2°. Достоинства планеты берутся по её телесному положению, не по антису. Со звёздами антисы не взаимодействуют.</div></fieldset>
   <fieldset><legend>Неподвижные звёзды</legend><div class="tw"><div id="stars"></div></div></fieldset>
   <fieldset><legend>Куспиды</legend><div class="cusps" id="cusps"></div></fieldset>
   <div class="stamp" id="stamp"></div>
@@ -521,6 +523,49 @@ function build(){
   tt+=`</tbody></table>`;
   document.getElementById("outers").innerHTML=tt;
 
+
+  /* антисы: соединение и оппозиция, орб не более 2° */
+  const ANT_ORB=2;
+  const anti=l=>norm(180-l), contra=l=>norm(360-l);
+  const an=[];
+  for(const A of rows){
+    if(OUTERS.includes(A.name)) continue;
+    const aL=anti(A.lon);
+    for(const B of rows){
+      if(B.name===A.name||OUTERS.includes(B.name)) continue;
+      const sep=Math.abs(norm(aL-B.lon+180)-180);
+      for(const [a,nm] of [[0,"соединение по антису"],[180,"оппозиция по антису"]]){
+        const orb=Math.abs(sep-a);
+        if(orb<=ANT_ORB&&PRU[A.name]<PRU[B.name])
+          an.push({who:PRU[A.name],wg:PGL[A.name],pt:a?contra(A.lon):aL,
+                   kind:a?"контрантис":"антис",nm,
+                   tg:PRU[B.name],tgl:PGL[B.name],orb});
+      }
+    }
+    for(let h=0;h<12;h++){
+      const sep=Math.abs(norm(aL-c[h]+180)-180);
+      for(const [a,nm] of [[0,"соединение по антису"],[180,"оппозиция по антису"]]){
+        const orb=Math.abs(sep-a);
+        if(orb<=ANT_ORB) an.push({who:PRU[A.name],wg:PGL[A.name],pt:a?contra(A.lon):aL,
+                                  kind:a?"контрантис":"антис",nm,
+                                  tg:"куспид "+RN[h],tgl:"·",orb});
+      }
+    }
+  }
+  an.sort((x,y)=>x.orb-y.orb);
+  let ant=`<table><thead><tr><th></th><th>Антис</th><th>С чем</th><th>Орб</th></tr></thead><tbody>`;
+  ant+= an.length?an.map(x=>
+    `<tr><td class="g">${x.wg}→${x.tgl}</td>`+
+    `<td>${x.kind} ${x.who}<div class="pk">${fmtName(x.pt)}</div></td>`+
+    `<td>${x.tg}<div class="pk">${x.nm}</div></td>`+
+    `<td>${fmtOrb(x.orb)}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="pk">Контактов по антису нет.</td></tr>`;
+  const seven=rows.filter(r=>!OUTERS.includes(r.name));
+  ant+=`</tbody></table>`+
+    `<div class="hint">Антисы: `+seven.map(r=>PGL[r.name]+" "+fmtName(anti(r.lon))).join(" · ")+`</div>`+
+    `<div class="hint">Контрантисы: `+seven.map(r=>PGL[r.name]+" "+fmtName(contra(r.lon))).join(" · ")+`</div>`;
+  document.getElementById("antis").innerHTML=ant;
+
   /* неподвижные звёзды */
   const year=utc.getUTCFullYear()+utc.getUTCMonth()/12;
   const st=[];
@@ -584,6 +629,9 @@ function build(){
   L.push("ПЛАНЕТЫ НА КУСПИДАХ");
   L.push(cj.length?cj.map(x=>`${PRU[x.name]} — куспид ${RN[x.h]}, орб ${fmtOrb(x.orb)}`).join("\n"):"нет");
   L.push("");
+  L.push("АНТИСЫ");
+  L.push(an.length?an.map(x=>`${x.kind} ${x.who} (${fmtName(x.pt)}) — ${x.tg}, орб ${fmtOrb(x.orb)}`).join("\n"):"нет");
+  L.push("");
   L.push("НЕПОДВИЖНЫЕ ЗВЁЗДЫ");
   L.push(st.length?st.map(x=>`${x.s.n} (${fmtName(x.sl)}) — ${x.who}, орб ${fmtOrb(x.orb)} — ${x.s.m}`).join("\n"):"нет");
   window.__report=L.join("\n");
@@ -599,6 +647,7 @@ function build(){
     aspects:asp.map(x=>({a:PRU[x.a.name],b:PRU[x.b.name],type:x.nm,orb:x.orb,applying:x.applying})),
     outers:tr.map(x=>({planet:PRU[x.o],type:x.nm,target:x.who,orb:x.orb})),
     cuspConjunctions:cj.map(x=>({planet:PRU[x.name],house:x.h+1,orb:x.orb})),
+    antiscia:an.map(x=>({planet:x.who,kind:x.kind,point:x.pt,type:x.nm,target:x.tg,orb:x.orb})),
     stars:st.map(x=>({star:x.s.n,lon:x.sl,target:x.who,orb:x.orb,meaning:x.s.m}))
   };
   document.getElementById("exp").style.display="block";
