@@ -124,22 +124,33 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 </div>
 <label for="tz">Часовой пояс</label>
 <select id="tz">
-  <option value="America/Chicago" selected>America/Chicago — Prosper, TX</option>
-  <option value="Europe/Riga">Europe/Riga — Рига</option>
-  <option value="Europe/Moscow">Europe/Moscow</option>
-  <option value="America/New_York">America/New_York</option>
-  <option value="America/Los_Angeles">America/Los_Angeles</option>
-  <option value="Europe/London">Europe/London</option>
-  <option value="UTC">UTC</option>
-  <optgroup label="Фиксированное смещение (как задано в Zet)">
-    <option value="FIX-8">GMT-8</option><option value="FIX-7">GMT-7</option>
-    <option value="FIX-6">GMT-6</option><option value="FIX-5">GMT-5</option>
-    <option value="FIX-4">GMT-4</option><option value="FIX+0">GMT+0</option>
-    <option value="FIX+1">GMT+1</option><option value="FIX+2">GMT+2</option>
-    <option value="FIX+3">GMT+3</option><option value="FIX+4">GMT+4</option>
+  <optgroup label="США и Канада">
+    <option value="America/New_York">Восточное · EST/EDT (UTC−5 / −4)</option>
+    <option value="America/Chicago" selected>Центральное · CST/CDT (UTC−6 / −5)</option>
+    <option value="America/Denver">Горное · MST/MDT (UTC−7 / −6)</option>
+    <option value="America/Phoenix">Аризона · MST (UTC−7, без перехода)</option>
+    <option value="America/Los_Angeles">Тихоокеанское · PST/PDT (UTC−8 / −7)</option>
+    <option value="America/Anchorage">Аляскинское · AKST/AKDT (UTC−9 / −8)</option>
+    <option value="Pacific/Honolulu">Гавайско-Алеутское · HST (UTC−10, без перехода)</option>
+  </optgroup>
+  <optgroup label="Европа">
+    <option value="UTC">Всемирное координированное · UTC (±0)</option>
+    <option value="Europe/London">Гринвичское · GMT/BST (UTC±0 / +1)</option>
+    <option value="Europe/Lisbon">Западноевропейское · WET/WEST (UTC±0 / +1)</option>
+    <option value="Europe/Berlin">Центральноевропейское · CET/CEST (UTC+1 / +2)</option>
+    <option value="Europe/Riga">Восточноевропейское · EET/EEST (UTC+2 / +3)</option>
+    <option value="Europe/Moscow">Московское · MSK (UTC+3, без перехода)</option>
+  </optgroup>
+  <optgroup label="Азия и Тихий океан">
+    <option value="Asia/Kolkata">Индийское · IST (UTC+5:30)</option>
+    <option value="Asia/Shanghai">Китайское · CST (UTC+8)</option>
+    <option value="Asia/Tokyo">Японское · JST (UTC+9)</option>
+    <option value="Australia/Sydney">Восточно-австралийское · AEST/AEDT (UTC+10 / +11)</option>
+    <option value="Pacific/Auckland">Новозеландское · NZST/NZDT (UTC+12 / +13)</option>
   </optgroup>
 </select>
-<div class="hint">Пояс города сам учитывает летнее время. Фиксированное смещение — нет; бери его, только если в Zet стоит именно GMT±N.</div>
+<div id="tzinfo" class="hint"></div>
+<div class="hint">Переход на летнее и зимнее время учитывается автоматически по дате карты и правилам региона: США — со второго воскресенья марта по первое воскресенье ноября, ЕС — с последнего воскресенья марта по последнее воскресенье октября. Вводите местное время по часам на стене, ничего вычитать не нужно.</div>
 <div class="btns"><button id="now">Сейчас</button></div>
 </fieldset>
 
@@ -833,7 +844,7 @@ function build(){
   /* данные для экспорта */
   const L=[];
   L.push("ХОРАРНАЯ КАРТА");
-  L.push(`${String(da).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${y}  ${String(hh).padStart(2,"0")}:${String(mi).padStart(2,"0")}  (${zone})`);
+  L.push(`${String(da).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${y}  ${String(hh).padStart(2,"0")}:${String(mi).padStart(2,"0")}  ${zoneTag(utc,zone)}`);
   L.push(`UTC ${utc.toISOString().slice(0,16).replace("T"," ")}`);
   L.push(`${locLabel} — ${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}`);
   L.push(`Дома по Региомонтану · ${dayChart?"дневная":"ночная"} карта`);
@@ -910,18 +921,60 @@ function setNow(){
   document.getElementById("date").value=`${p.day}.${p.month}.${p.year}`;
   document.getElementById("time").value=`${String(+p.hour%24).padStart(2,"0")}:${p.minute}`;
 }
-document.getElementById("now").onclick=()=>{setNow();build()};
-document.getElementById("calc").onclick=build;
+document.getElementById("now").onclick=()=>{setNow();showLoc();build()};
+document.getElementById("calc").onclick=()=>{showLoc();build()};
 const preset=document.getElementById("preset"), placeEl=document.getElementById("place"),
       tzEl=document.getElementById("tz"), perr=document.getElementById("perr"),
       locline=document.getElementById("locline");
+const ZONE_ABBR={
+  "America/New_York":["EST","EDT"], "America/Chicago":["CST","CDT"],
+  "America/Denver":["MST","MDT"],   "America/Phoenix":["MST","MST"],
+  "America/Los_Angeles":["PST","PDT"], "America/Anchorage":["AKST","AKDT"],
+  "Pacific/Honolulu":["HST","HST"], "UTC":["UTC","UTC"],
+  "Europe/London":["GMT","BST"],    "Europe/Lisbon":["WET","WEST"],
+  "Europe/Berlin":["CET","CEST"],   "Europe/Riga":["EET","EEST"],
+  "Europe/Moscow":["MSK","MSK"],    "Asia/Kolkata":["IST","IST"],
+  "Asia/Shanghai":["CST","CST"],    "Asia/Tokyo":["JST","JST"],
+  "Australia/Sydney":["AEST","AEDT"], "Pacific/Auckland":["NZST","NZDT"]
+};
+function offStr(off){
+  const sg=off<0?"\u2212":"+", a=Math.abs(off), h=Math.floor(a+1e-9),
+        m=Math.round((a-h)*60);
+  return "UTC"+sg+h+(m?":"+String(m).padStart(2,"0"):"");
+}
+/* стандартное смещение зоны = минимальное за год: летнее всегда больше */
+function stdOffset(zone,y){
+  let mn=99; for(let mo=0;mo<12;mo++){
+    const o=tzOffset(new Date(Date.UTC(y,mo,15,12)),zone); if(o<mn)mn=o;
+  } return mn;
+}
+/* подпись пояса на момент карты: аббревиатура, смещение, признак летнего */
+function zoneTag(utc,zone){
+  if(zone.startsWith("FIX")) return "GMT"+zone.slice(3)+" (фиксированное смещение)";
+  const off=tzOffset(utc,zone), std=stdOffset(zone,utc.getUTCFullYear()),
+        dst=off>std+1e-9, ab=ZONE_ABBR[zone];
+  const name=ab?ab[dst?1:0]:zone;
+  if(name==="UTC") return "UTC (±0)";
+  return name+" "+offStr(off)+(dst?" · летнее время":"");
+}
 const ZONE_PLACE={
   "America/Chicago":["33.2362","-96.8011","Prosper, TX"],
   "Europe/Riga":["56.9500","24.1000","Рига"],
   "Europe/Moscow":["55.7558","37.6173","Москва"],
   "America/New_York":["40.7128","-74.0060","Нью-Йорк"],
   "America/Los_Angeles":["34.0522","-118.2437","Лос-Анджелес"],
+  "America/Denver":["39.7392","-104.9903","Денвер"],
+  "America/Phoenix":["33.4484","-112.0740","Финикс"],
+  "America/Anchorage":["61.2181","-149.9003","Анкоридж"],
+  "Pacific/Honolulu":["21.3069","-157.8583","Гонолулу"],
   "Europe/London":["51.5074","-0.1278","Лондон"],
+  "Europe/Lisbon":["38.7223","-9.1393","Лиссабон"],
+  "Europe/Berlin":["52.5200","13.4050","Берлин"],
+  "Asia/Kolkata":["28.6139","77.2090","Дели"],
+  "Asia/Shanghai":["31.2304","121.4737","Шанхай"],
+  "Asia/Tokyo":["35.6762","139.6503","Токио"],
+  "Australia/Sydney":["-33.8688","151.2093","Сидней"],
+  "Pacific/Auckland":["-36.8485","174.7633","Окленд"],
   "UTC":["51.4779","0.0015","Гринвич"]
 };
 let locLabel="Prosper, TX";
@@ -956,11 +1009,32 @@ function refreshSavedOption(){
   if(saved){ opt.style.display=""; opt.textContent=`Сохранённое: ${saved.label} (${saved.lat.toFixed(4)}, ${saved.lon.toFixed(4)})`; }
   else opt.style.display="none";
 }
+function showTz(){
+  const el=document.getElementById("tzinfo"); if(!el) return;
+  const z=document.getElementById("tz").value;
+  const dm=(document.getElementById("date").value||"").match(/^(\d{2})\.(\d{2})\.(\d{4})$/),
+        tm=(document.getElementById("time").value||"").match(/^(\d{1,2}):(\d{2})$/);
+  if(!dm||!tm){ el.textContent="На момент карты: укажите дату и время."; return; }
+  const utc=localToUTC(+dm[3],+dm[2],+dm[1],+tm[1],+tm[2],z);
+  el.textContent="На момент карты: "+zoneTag(utc,z)+
+    " · UTC "+utc.toISOString().slice(0,16).replace("T"," ");
+}
+/* подпись места всегда выводится из текущего выбора города,
+   а не из переменной, которую мог не обновить пропущенный обработчик */
+function syncLabel(){
+  const v=preset.value;
+  if(v!=="custom"&&v!=="saved"&&preset.selectedIndex>=0)
+    locLabel=preset.options[preset.selectedIndex].textContent.trim();
+  return locLabel;
+}
 function showLoc(pref){
   const co=parseCoords(placeEl.value);
-  locline.textContent=(pref||"Место")+": "+locLabel+" — "+
+  const zt=tzEl.options[tzEl.selectedIndex]?
+    tzEl.options[tzEl.selectedIndex].textContent.split("·")[0].trim():tzEl.value;
+  locline.textContent=(pref||"Место")+": "+syncLabel()+" — "+
     (co?co.lat.toFixed(4)+", "+co.lon.toFixed(4):"координаты не распознаны")+
-    " · "+tzEl.value;
+    " · "+zt;
+  showTz();
 }
 tzEl.onchange=()=>{
   const z=ZONE_PLACE[tzEl.value];
@@ -1061,6 +1135,7 @@ timeEl.addEventListener("input",()=>{
   let v=timeEl.value.replace(/[^0-9]/g,"").slice(0,4);
   if(v.length>=3) v=v.slice(0,v.length-2)+":"+v.slice(-2);
   timeEl.value=v;
+  showTz();
 });
 timeEl.addEventListener("blur",()=>{
   const m=timeEl.value.match(/^(\d{1,2}):(\d{2})$/);
@@ -1075,6 +1150,7 @@ dateEl.addEventListener("input",()=>{
   if(v.length>4) out=v.slice(0,2)+"."+v.slice(2,4)+"."+v.slice(4);
   else if(v.length>2) out=v.slice(0,2)+"."+v.slice(2);
   dateEl.value=out;
+  showTz();
 });
 
 /* календарь: нативное поле лежит поверх кнопки */
@@ -1093,8 +1169,10 @@ pick.addEventListener("change",()=>{
   if(!pick.value) return;
   const [Y,M,D]=pick.value.split("-");
   dateEl.value=`${D}.${M}.${Y}`;
+  showTz();
 });
 toPicker();
+showTz();
 
 refreshSavedOption();
 { const s=loadSaved();
