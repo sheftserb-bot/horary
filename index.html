@@ -95,6 +95,15 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 .calbox button{width:100%}
 #dpick{position:absolute;inset:0;width:100%;height:100%;opacity:0;
   border:0;padding:0;margin:0;background:transparent;-webkit-appearance:none;appearance:none}
+
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.chip{flex:0 1 auto;padding:10px 12px;font-size:12px;letter-spacing:.04em;text-transform:none}
+.chip.on{background:var(--brass);color:#12181F;border-color:var(--brass);font-weight:700}
+.ptbox{border:1px solid var(--line);border-radius:2px;padding:12px;margin-bottom:10px;background:#0D1319}
+.pttitle{color:var(--brass);font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  font-family:ui-monospace,monospace;margin-bottom:4px}
+.ptval{font-family:ui-monospace,monospace;font-size:15px;margin-bottom:6px}
+.ptbox .hint{margin-top:8px}
 </style>
 </head>
 <body>
@@ -161,14 +170,18 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   <fieldset style="margin-top:18px"><legend>Карта</legend><div id="wheel"></div></fieldset>
   <fieldset><legend>Планеты</legend><div class="tw"><div id="tbl"></div></div>
     <div class="hint">Достоинства по таблице Птолемея: обитель, экзальтация, триплицитет, терм, фас, изгнание, падение. Термы — Птолемея, фасы — халдейские, триплицитет — по дню и ночи.</div></fieldset>
-  <fieldset><legend>Аспекты</legend><div class="tw"><div id="asp"></div></div>
-    <div class="hint">Орбы по половинам светил Фроули, только семь планет.</div></fieldset>
+  <fieldset><legend>Луна</legend><div class="tw"><div id="moon"></div></div>
+    <div class="hint">Без курса — если до выхода из знака Луна не совершает ни одного аспекта. Аспекты к Частям не в счёт. Via Combusta — от 15° Весов до 15° Скорпиона, Луна там тревожна, но не ослаблена.</div></fieldset>
+  <fieldset><legend>Аспекты</legend><div id="asp"></div>
+    <div class="hint">Орбы по половинам светил Фроули, только семь планет. Нажмите планету, чтобы увидеть её аспекты.</div></fieldset>
   <fieldset><legend>Транссатурновые</legend><div class="tw"><div id="outers"></div></div>
     <div class="hint">По Фроули: как неподвижные звёзды — только соединение и оппозиция с планетами и значимыми куспидами, радиус 2°. Между собой не рассматриваются. Знаками не управляют.</div></fieldset>
   <fieldset><legend>Соединения с куспидами</legend><div class="tw"><div id="cusp-conj"></div></div>
     <div class="hint">Только в пределах одного знака. Куспиды, не относящиеся к вопросу, игнорируются.</div></fieldset>
-  <fieldset><legend>Антисы</legend><div class="tw"><div id="antis"></div></div>
-    <div class="hint">Ось 0° Рака — 0° Козерога. Только соединение и оппозиция, орб до 2°. Достоинства планеты берутся по её телесному положению, не по антису. Со звёздами антисы не взаимодействуют.</div></fieldset>
+  <fieldset><legend>Антисы</legend><div id="antis"></div>
+    <div class="hint">Ось 0° Рака — 0° Козерога. Только соединение и оппозиция, орб до 2°. Достоинства берутся по телесному положению планеты. Со звёздами антисы не взаимодействуют.</div></fieldset>
+  <fieldset><legend>Арабские части</legend><div id="parts"></div>
+    <div class="hint">Части не отбрасывают аспекты, а получают их. Считайте только ту часть, которая относится к предмету вопроса. В производных картах часть тоже разворачивается.</div></fieldset>
   <fieldset><legend>Неподвижные звёзды</legend><div class="tw"><div id="stars"></div></div></fieldset>
   <fieldset><legend>Куспиды</legend><div class="cusps" id="cusps"></div></fieldset>
   <div class="stamp" id="stamp"></div>
@@ -390,6 +403,254 @@ function wheel(c,planets){
   return s;
 }
 
+
+/* ---------- расчёт по требованию: антисы и арабские части ---------- */
+let CHART=null, ASPLIST=[], CALC={aspects:{},antis:{},parts:{}};
+
+function buildReport(){
+  let t=window.__base||"";
+  const S=Object.values(CALC.aspects), A=Object.values(CALC.antis), P=Object.values(CALC.parts);
+  if(S.length){
+    t+="\n\nАСПЕКТЫ (рассчитанные)\n";
+    t+=S.map(x=>`${x.name}:`+(x.list.length?"\n"+x.list.map(c=>
+      `    ${c.type} ${c.with}, орб ${c.orb}, ${c.status}`).join("\n"):"\n    нет")).join("\n");
+  }
+  if(A.length){
+    t+="\n\nАНТИСЫ (рассчитанные)\n";
+    t+=A.map(x=>`${x.name}: антис ${x.a} (дом ${x.ah})   контрантис ${x.k} (дом ${x.kh})`+
+      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.pt} ${c.nm} ${c.t}, орб ${c.orb}`).join("\n"):"\n    контактов нет")
+    ).join("\n");
+  }
+  if(P.length){
+    t+="\n\nАРАБСКИЕ ЧАСТИ (рассчитанные)\n";
+    t+=P.map(x=>`Часть ${x.name}: ${x.lon} (дом ${x.house}), диспозитор ${x.disp}`+
+      (x.cc.length?"\n"+x.cc.map(c=>`    ${c.nm} ${c.t}, орб ${c.orb}`).join("\n"):"\n    контактов нет")
+    ).join("\n");
+  }
+  return t;
+}
+function syncExport(){
+  const r=document.getElementById("rep");
+  if(r) r.value=buildReport();
+  if(window.__json){
+    window.__json.aspects=Object.values(CALC.aspects);
+    window.__json.antiscia=Object.values(CALC.antis);
+    window.__json.parts=Object.values(CALC.parts);
+  }
+}
+const ANT_ORB=2;
+const antisOf=l=>norm(180-l), contraOf=l=>norm(360-l);
+
+function contacts(pt, skipName){
+  const out=[], c=CHART.cusps;
+  for(const r of CHART.rows){
+    if(r.name===skipName) continue;
+    const sep=Math.abs(norm(pt-r.lon+180)-180);
+    if(sep<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"соединение",orb:sep});
+    else if(Math.abs(sep-180)<=ANT_ORB) out.push({t:PRU[r.name],g:PGL[r.name],nm:"оппозиция",orb:Math.abs(sep-180)});
+  }
+  for(let h=0;h<12;h++){
+    const sep=Math.abs(norm(pt-c[h]+180)-180);
+    if(sep<=ANT_ORB) out.push({t:"куспид "+CHART.RN[h],g:"·",nm:"соединение",orb:sep});
+    else if(Math.abs(sep-180)<=ANT_ORB) out.push({t:"куспид "+CHART.RN[h],g:"·",nm:"оппозиция",orb:Math.abs(sep-180)});
+  }
+  return out.sort((a,b)=>a.orb-b.orb);
+}
+
+function aspectsButtons(){
+  return `<div class="btnrow">`+CHART.rows.map(r=>
+    `<button class="chip" data-asp="${r.name}">${PGL[r.name]} ${PRU[r.name]}</button>`).join("")+
+    `</div><div id="asp-out"></div>`;
+}
+function showAspects(name){
+  const list=ASPLIST.filter(x=>x.a.name===name||x.b.name===name);
+  const html=list.length?`<div class="tw"><table><thead><tr><th></th><th>Аспект</th><th>Орб</th><th>Статус</th></tr></thead><tbody>`+
+    list.map(x=>{
+      const other=x.a.name===name?x.b:x.a;
+      return `<tr><td class="g">${PGL[name]}${x.gl}${PGL[other.name]}</td>`+
+        `<td>${PRU[other.name]}<div class="pk">${x.nm}</div></td>`+
+        `<td>${fmtOrb(x.orb)}<div class="pk">макс. ${x.max}°</div></td>`+
+        `<td class="${x.applying?"dig":"pk"}">${x.applying?"сходящийся":"расходящийся"}</td></tr>`;
+    }).join("")+`</tbody></table></div>`
+    :`<div class="pk">Аспектов в пределах орбов нет.</div>`;
+  document.getElementById("asp-out").innerHTML=
+    `<div class="ptbox"><div class="pttitle">Аспекты ${PRU[name]}</div>`+
+    `<div class="ptval">${fmtName(CHART.rows.find(r=>r.name===name).lon)}</div>${html}</div>`;
+  CALC.aspects[name]={name:PRU[name], list:list.map(x=>{
+    const other=x.a.name===name?x.b:x.a;
+    return {with:PRU[other.name], type:x.nm, orb:fmtOrb(x.orb),
+            status:x.applying?"сходящийся":"расходящийся"};})};
+  syncExport();
+}
+
+function antisButtons(){
+  return `<div class="btnrow">`+CHART.rows.map(r=>
+    `<button class="chip" data-ant="${r.name}">${PGL[r.name]} ${PRU[r.name]}</button>`).join("")+
+    `</div><div id="antis-out"></div>`;
+}
+function showAntis(name){
+  const r=CHART.rows.find(x=>x.name===name);
+  const a=antisOf(r.lon), k=contraOf(r.lon);
+  const list=(pt,label)=>{
+    const cc=contacts(pt,name);
+    return `<div class="ptbox"><div class="pttitle">${label} ${PRU[name]}</div>`+
+      `<div class="ptval">${fmtName(pt)} · дом ${houseOf(pt,CHART.cusps)}</div>`+
+      (cc.length?`<table><tbody>`+cc.map(x=>
+        `<tr><td class="g">${x.g}</td><td>${x.t}<div class="pk">${x.nm}</div></td>`+
+        `<td>${fmtOrb(x.orb)}</td></tr>`).join("")+`</tbody></table>`
+        :`<div class="pk">контактов в пределах 2° нет</div>`)+`</div>`;
+  };
+  document.getElementById("antis-out").innerHTML=
+    `<div class="tw">`+list(a,"Антис")+list(k,"Контрантис")+`</div>`;
+  const pack=(pt,label)=>contacts(pt,name).map(x=>({pt:label,nm:x.nm,t:x.t,orb:fmtOrb(x.orb)}));
+  CALC.antis[name]={name:PRU[name], a:fmtName(a), ah:houseOf(a,CHART.cusps),
+    k:fmtName(k), kh:houseOf(k,CHART.cusps),
+    cc:pack(a,"антис").concat(pack(k,"контрантис"))};
+  syncExport();
+}
+
+/* Части по главе 12. rev — переворачивается ли формула в ночной карте */
+const PARTS=[
+ {id:"fort", n:"Фортуна", f:C=>C.asc+C.moon-C.sun, rev:true,
+  note:"Сокровище кверента. В хораре роль ограничена."},
+ {id:"marr", n:"Брак", f:C=>C.asc+C.dsc-C.venus, rev:false,
+  note:"Описывает отношения, но не указывает на событие."},
+ {id:"marrW",n:"Брак для женщин", f:C=>C.asc+C.saturn-C.venus, rev:false,
+  note:"Только для браков по договорённости."},
+ {id:"marrM",n:"Брак для мужчин", f:C=>C.asc+C.venus-C.saturn, rev:false,
+  note:"Только для браков по договорённости."},
+ {id:"part", n:"Партнёр в браке", f:C=>C.asc+C.dsc-C.lord7, rev:false,
+  note:"Владыка VII берётся по знаку на куспиде VII."},
+ {id:"div",  n:"Развод", f:C=>C.asc+C.dsc-C.mars, rev:false,
+  note:"Не считайте, если развод не является реальной альтернативой."},
+ {id:"dism", n:"Отставка и увольнение", f:C=>C.saturn+C.jupiter-C.sun, rev:false,
+  note:"Для вопросов «удержусь ли я на работе»."},
+ {id:"voc",  n:"Призвание", f:C=>C.mc+C.moon-C.sun, rev:false,
+  note:"Фроули не советует переворачивать формулу в ночных картах."},
+ {id:"glory",n:"Слава (Задание, которое должно быть выполнено)",
+  f:C=>C.asc+C.jupiter-C.sun, rev:true, note:"Скорее долг, чем прославление."},
+ {id:"surg", n:"Хирургия", f:C=>C.asc+C.saturn-C.mars, rev:false,
+  note:"Для вопросов об операции."},
+ {id:"dth1", n:"Смерть (первая формула)", f:C=>C.asc+C.c8-C.moon, rev:false,
+  note:"Только когда смерть — сомнительная возможность, а не прямой вопрос."},
+ {id:"dth2", n:"Смерть (вторая формула)", f:C=>C.c8+C.saturn-C.moon, rev:false,
+  note:"Только когда смерть — сомнительная возможность, а не прямой вопрос."}
+];
+function partCtx(){
+  const g=n=>CHART.all.find(r=>r.name===n).lon, c=CHART.cusps;
+  const l7=RUL[Math.floor(c[6]/30)];
+  const byIdx=["Sun","Moon","Mercury","Venus","Jupiter","Mars","Saturn"];
+  return {asc:c[0], dsc:c[6], mc:c[9], c8:c[7],
+    sun:g("Sun"), moon:g("Moon"), venus:g("Venus"), mars:g("Mars"),
+    jupiter:g("Jupiter"), saturn:g("Saturn"), mercury:g("Mercury"),
+    lord7:g(byIdx[l7]), lord7name:PN[l7]};
+}
+function partsButtons(){
+  return `<div class="btnrow">`+PARTS.map(p=>
+    `<button class="chip" data-part="${p.id}">${p.n}</button>`).join("")+
+    `</div><div id="parts-out"></div>`;
+}
+function showPart(id){
+  const p=PARTS.find(x=>x.id===id), C=partCtx();
+  let lon;
+  if(p.rev&&!CHART.day){
+    // ночная карта: формула переворачивается
+    if(p.id==="fort") lon=C.asc+C.sun-C.moon;
+    else if(p.id==="glory") lon=C.asc+C.sun-C.jupiter;
+    else lon=p.f(C);
+  } else lon=p.f(C);
+  lon=norm(lon);
+  const cc=contacts(lon,null), disp=PN[RUL[Math.floor(lon/30)]];
+  document.getElementById("parts-out").innerHTML=
+    `<div class="ptbox"><div class="pttitle">Часть ${p.n}</div>`+
+    `<div class="ptval">${fmtName(lon)} · дом ${houseOf(lon,CHART.cusps)}</div>`+
+    `<div class="pk">диспозитор: ${disp}`+
+    (p.id==="part"?` · Владыка VII: ${C.lord7name}`:"")+
+    (p.rev?` · формула ${CHART.day?"дневная":"перевёрнута (ночная карта)"}`:"")+`</div>`+
+    (cc.length?`<div class="tw"><table><thead><tr><th></th><th>Контакт</th><th>Орб</th></tr></thead><tbody>`+
+      cc.map(x=>`<tr><td class="g">${x.g}</td><td>${x.t}<div class="pk">${x.nm}</div></td>`+
+      `<td>${fmtOrb(x.orb)}</td></tr>`).join("")+`</tbody></table></div>`
+      :`<div class="pk">соединений и оппозиций в пределах 2° нет</div>`)+
+    `<div class="hint">${p.note}</div></div>`;
+  CALC.parts[p.id]={name:p.n, lon:fmtName(lon), lonDeg:lon, house:houseOf(lon,CHART.cusps),
+    disp, cc:cc.map(x=>({nm:x.nm,t:x.t,orb:fmtOrb(x.orb)}))};
+  syncExport();
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b||!CHART) return;
+  if(b.dataset.asp){ document.querySelectorAll("[data-asp]").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); showAspects(b.dataset.asp); }
+  if(b.dataset.ant){ document.querySelectorAll("[data-ant]").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); showAntis(b.dataset.ant); }
+  if(b.dataset.part){ document.querySelectorAll("[data-part]").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); showPart(b.dataset.part); }
+});
+
+
+/* ---------- состояние Луны: всегда на виду ---------- */
+function moonReport(d,c,rows){
+  const moon=rows.find(r=>r.name==="Moon"), sun=rows.find(r=>r.name==="Sun");
+  const sign=Math.floor(moon.lon/30), endOfSign=(sign+1)*30;
+  const seven=rows.filter(r=>!OUTERS.includes(r.name)&&r.name!=="Moon");
+  // ищем ближайший аспект вперёд (до выхода из знака) и назад
+  let next=null, last=null;
+  const step=0.02;
+  // знаковая разница: положение планеты минус положение Луны, от -180 до 180
+  const sd=(dd,rname)=>{
+    const ml=bodyLon("Moon",dd);
+    return norm(bodyLon(rname,dd)-ml+180)-180;
+  };
+  // для оппозиции берём другую ветку, чтобы не ловить разрыв на ±180
+  const sdOpp=(dd,rname)=>{
+    const ml=bodyLon("Moon",dd);
+    return norm(bodyLon(rname,dd)-ml)-180;
+  };
+  const signed=(dd,rname,a)=>(Math.abs(a)===180? sdOpp(dd,rname) : sd(dd,rname)-a);
+  const inSign=dd=>Math.floor(norm(bodyLon("Moon",dd))/30)===sign;
+  for(const r of seven){
+    for(const [ang,nm,gl] of ASPECTS){
+     for(const a of (ang===0||ang===180?[ang===0?0:180]:[ang,-ang])){
+      for(const dir of [1,-1]){
+        let prev=signed(d,r.name,a), t=0;
+        while(t<12){
+          t+=step;
+          const dd=d+dir*t;
+          if(!inSign(dd)) break;
+          const cur=signed(dd,r.name,a);
+          if(Math.abs(cur-prev)>90){ prev=cur; continue; }   // разрыв, не аспект
+          if(prev===0||(prev<0)!==(cur<0)){
+            // уточняем момент делением пополам
+            let lo=t-step, hi=t;
+            for(let i=0;i<24;i++){
+              const mid=(lo+hi)/2;
+              ((signed(d+dir*lo,r.name,a)<0)!==(signed(d+dir*mid,r.name,a)<0))?hi=mid:lo=mid;
+            }
+            const tt=(lo+hi)/2, rec={who:PRU[r.name],gl,nm,t:tt,lon:bodyLon("Moon",d+dir*tt)};
+            if(dir>0){ if(!next||rec.t<next.t) next=rec; }
+            else     { if(!last||rec.t<last.t) last=rec; }
+            break;
+          }
+          prev=cur;
+        }
+      }
+     }
+    }
+  }
+  const voc=!next;
+  const vc=(moon.lon>=195&&moon.lon<=225);
+  const waxing=norm(moon.lon-sun.lon)<180;
+  const hrs=t=>{const h=Math.abs(t)*24; return h<48?h.toFixed(1)+" ч":(h/24).toFixed(1)+" сут"};
+  let h=`<div class="ptbox"><div class="pttitle">Луна</div>`+
+    `<div class="ptval">${fmtName(moon.lon)} · дом ${houseOf(moon.lon,c)} · ${moon.speed.toFixed(2)}°/сут · ${waxing?"прибывает":"убывает"}</div>`;
+  h+=`<table><tbody>`;
+  h+=`<tr><td>Последний аспект</td><td>${last?`${last.gl} ${last.who}, ${last.nm}, ${hrs(last.t)} назад`:"нет в этом знаке"}</td></tr>`;
+  h+=`<tr><td>Следующий аспект</td><td>${next?`${next.gl} ${next.who}, ${next.nm}, через ${hrs(next.t)}`:"—"}</td></tr>`;
+  h+=`<tr><td>Без курса</td><td class="${voc?"deb":"pk"}">${voc?"да — до конца знака аспектов нет":"нет"}</td></tr>`;
+  h+=`<tr><td>Via Combusta</td><td class="${vc?"deb":"pk"}">${vc?"да — 15 Весов … 15 Скорпиона":"нет"}</td></tr>`;
+  h+=`</tbody></table></div>`;
+  return {html:h, voc, vc, waxing, next, last};
+}
+
 /* ---------- сборка ---------- */
 function build(){
   const dv=document.getElementById("date").value, tv=document.getElementById("time").value;
@@ -461,15 +722,7 @@ function build(){
     }
   }
   asp.sort((x,y)=>x.orb-y.orb);
-  let at=`<table><thead><tr><th></th><th>Аспект</th><th>Орб</th><th>Статус</th></tr></thead><tbody>`;
-  at+= asp.length?asp.map(x=>{
-    return `<tr><td class="g">${PGL[x.a.name]}${x.gl}${PGL[x.b.name]}</td>`+
-      `<td>${PRU[x.a.name]} — ${PRU[x.b.name]}<div class="pk">${x.nm}${x.outer?" · транссатурновая":""}</div></td>`+
-      `<td>${fmtOrb(x.orb)}<div class="pk">макс. ${x.max}°</div></td>`+
-      `<td class="${x.applying?"dig":"pk"}">${x.applying?"сходящийся":"расходящийся"}</td></tr>`;
-  }).join(""):`<tr><td colspan="4" class="pk">Аспектов в пределах орбов нет.</td></tr>`;
-  at+=`</tbody></table>`;
-  document.getElementById("asp").innerHTML=at;
+  ASPLIST=asp;
 
   /* соединения с куспидами */
   const RN=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
@@ -524,48 +777,7 @@ function build(){
   document.getElementById("outers").innerHTML=tt;
 
 
-  /* антисы: соединение и оппозиция, орб не более 2° */
-  const ANT_ORB=2;
-  const anti=l=>norm(180-l), contra=l=>norm(360-l);
-  const an=[];
-  for(const A of rows){
-    if(OUTERS.includes(A.name)) continue;
-    const aL=anti(A.lon);
-    for(const B of rows){
-      if(B.name===A.name||OUTERS.includes(B.name)) continue;
-      const sep=Math.abs(norm(aL-B.lon+180)-180);
-      for(const [a,nm] of [[0,"соединение по антису"],[180,"оппозиция по антису"]]){
-        const orb=Math.abs(sep-a);
-        if(orb<=ANT_ORB&&PRU[A.name]<PRU[B.name])
-          an.push({who:PRU[A.name],wg:PGL[A.name],pt:a?contra(A.lon):aL,
-                   kind:a?"контрантис":"антис",nm,
-                   tg:PRU[B.name],tgl:PGL[B.name],orb});
-      }
-    }
-    for(let h=0;h<12;h++){
-      const sep=Math.abs(norm(aL-c[h]+180)-180);
-      for(const [a,nm] of [[0,"соединение по антису"],[180,"оппозиция по антису"]]){
-        const orb=Math.abs(sep-a);
-        if(orb<=ANT_ORB) an.push({who:PRU[A.name],wg:PGL[A.name],pt:a?contra(A.lon):aL,
-                                  kind:a?"контрантис":"антис",nm,
-                                  tg:"куспид "+RN[h],tgl:"·",orb});
-      }
-    }
-  }
-  an.sort((x,y)=>x.orb-y.orb);
-  let ant=`<table><thead><tr><th></th><th>Антис</th><th>С чем</th><th>Орб</th></tr></thead><tbody>`;
-  ant+= an.length?an.map(x=>
-    `<tr><td class="g">${x.wg}→${x.tgl}</td>`+
-    `<td>${x.kind} ${x.who}<div class="pk">${fmtName(x.pt)}</div></td>`+
-    `<td>${x.tg}<div class="pk">${x.nm}</div></td>`+
-    `<td>${fmtOrb(x.orb)}</td></tr>`).join("")
-    :`<tr><td colspan="4" class="pk">Контактов по антису нет.</td></tr>`;
-  const seven=rows.filter(r=>!OUTERS.includes(r.name));
-  ant+=`</tbody></table>`+
-    `<div class="hint">Антисы: `+seven.map(r=>PGL[r.name]+" "+fmtName(anti(r.lon))).join(" · ")+`</div>`+
-    `<div class="hint">Контрантисы: `+seven.map(r=>PGL[r.name]+" "+fmtName(contra(r.lon))).join(" · ")+`</div>`;
-  document.getElementById("antis").innerHTML=ant;
-
+  /* антисы и части считаются по кнопке — см. CHART ниже */
   /* неподвижные звёзды */
   const year=utc.getUTCFullYear()+utc.getUTCMonth()/12;
   const st=[];
@@ -599,6 +811,12 @@ function build(){
     `<span>UTC ${utc.toISOString().slice(0,16).replace("T"," ")} (${off>=0?"+":""}${off})</span>`+
     `<span>${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}</span>`+
     `<span>${dayChart?"дневная карта":"ночная карта"}</span>`;
+  CHART={rows:rows.filter(r=>!OUTERS.includes(r.name)), all:rows, cusps:c, day:dayChart, RN:RN};
+  const MR=moonReport(d,c,rows);
+  document.getElementById("moon").innerHTML=MR.html;
+  document.getElementById("asp").innerHTML=aspectsButtons();
+  document.getElementById("antis").innerHTML=antisButtons();
+  document.getElementById("parts").innerHTML=partsButtons();
   document.getElementById("out").style.display="block";
   document.getElementById("out").scrollIntoView({behavior:"smooth",block:"start"});
 
@@ -620,8 +838,11 @@ function build(){
   L.push("КУСПИДЫ");
   names.forEach((n,i)=>L.push(`${n.padEnd(10)} ${fmtName(c[i])}`));
   L.push("");
-  L.push("АСПЕКТЫ");
-  L.push(asp.length?asp.map(x=>`${PRU[x.a.name]} ${x.nm} ${PRU[x.b.name]}, орб ${fmtOrb(x.orb)}, ${x.applying?"сходящийся":"расходящийся"}`).join("\n"):"нет");
+  L.push("ЛУНА");
+  L.push(`${fmtName(rows.find(r=>r.name==="Moon").lon)}, дом ${houseOf(rows.find(r=>r.name==="Moon").lon,c)}, ${MR.waxing?"прибывает":"убывает"}`);
+  L.push(`последний аспект: ${MR.last?MR.last.nm+" "+MR.last.who:"нет в этом знаке"}`);
+  L.push(`следующий аспект: ${MR.next?MR.next.nm+" "+MR.next.who:"нет — Луна без курса"}`);
+  L.push(`без курса: ${MR.voc?"да":"нет"} · Via Combusta: ${MR.vc?"да":"нет"}`);
   L.push("");
   L.push("ТРАНССАТУРНОВЫЕ");
   L.push(tr.length?tr.map(x=>`${PRU[x.o]} ${x.nm} ${x.who}, орб ${fmtOrb(x.orb)}`).join("\n"):"не задействованы");
@@ -629,12 +850,10 @@ function build(){
   L.push("ПЛАНЕТЫ НА КУСПИДАХ");
   L.push(cj.length?cj.map(x=>`${PRU[x.name]} — куспид ${RN[x.h]}, орб ${fmtOrb(x.orb)}`).join("\n"):"нет");
   L.push("");
-  L.push("АНТИСЫ");
-  L.push(an.length?an.map(x=>`${x.kind} ${x.who} (${fmtName(x.pt)}) — ${x.tg}, орб ${fmtOrb(x.orb)}`).join("\n"):"нет");
-  L.push("");
   L.push("НЕПОДВИЖНЫЕ ЗВЁЗДЫ");
   L.push(st.length?st.map(x=>`${x.s.n} (${fmtName(x.sl)}) — ${x.who}, орб ${fmtOrb(x.orb)} — ${x.s.m}`).join("\n"):"нет");
-  window.__report=L.join("\n");
+  window.__base=L.join("\n");
+  CALC={aspects:{},antis:{},parts:{}};
   window.__json={
     moment:{local:`${String(da).padStart(2,"0")}.${String(mo).padStart(2,"0")}.${y} ${String(hh).padStart(2,"0")}:${String(mi).padStart(2,"0")}`,
       zone, utc:utc.toISOString()},
@@ -644,14 +863,17 @@ function build(){
       retro:!!r.retro, house:houseOf(r.lon,c), speed:r.speed,
       dignities:(PIDX[r.name]===undefined?[]:dignities(PIDX[r.name],r.lon,dayChart).map(x=>x[0]))})),
     cusps:c.map((l,i)=>({house:i+1, lon:l, text:fmtName(l)})),
-    aspects:asp.map(x=>({a:PRU[x.a.name],b:PRU[x.b.name],type:x.nm,orb:x.orb,applying:x.applying})),
+    aspects:[],
+    moon:{voidOfCourse:MR.voc, viaCombusta:MR.vc, waxing:MR.waxing,
+      lastAspect:MR.last?{planet:MR.last.who,type:MR.last.nm}:null,
+      nextAspect:MR.next?{planet:MR.next.who,type:MR.next.nm}:null},
     outers:tr.map(x=>({planet:PRU[x.o],type:x.nm,target:x.who,orb:x.orb})),
     cuspConjunctions:cj.map(x=>({planet:PRU[x.name],house:x.h+1,orb:x.orb})),
-    antiscia:an.map(x=>({planet:x.who,kind:x.kind,point:x.pt,type:x.nm,target:x.tg,orb:x.orb})),
+    antiscia:[], parts:[],
     stars:st.map(x=>({star:x.s.n,lon:x.sl,target:x.who,orb:x.orb,meaning:x.s.m}))
   };
   document.getElementById("exp").style.display="block";
-  document.getElementById("rep").value=window.__report;
+  document.getElementById("rep").value=buildReport();
 }
 function download(name,text,type){
   const b=new Blob([text],{type:type||"text/plain;charset=utf-8"});
@@ -742,13 +964,13 @@ document.getElementById("geo").onclick=()=>{
 };
 document.getElementById("dl-txt").onclick=()=>{
   const n=(window.__json?window.__json.moment.local.replace(/[ :.]/g,"-"):"chart");
-  download("horary-"+n+".txt", window.__report||"");};
+  download("horary-"+n+".txt", buildReport());};
 document.getElementById("dl-json").onclick=()=>{
   const n=(window.__json?window.__json.moment.local.replace(/[ :.]/g,"-"):"chart");
   download("horary-"+n+".json", JSON.stringify(window.__json,null,2), "application/json");};
 document.getElementById("copy").onclick=async()=>{
   const h=document.getElementById("exp-hint"), r=document.getElementById("rep");
-  try{await navigator.clipboard.writeText(window.__report||"");h.textContent="Скопировано.";}
+  try{await navigator.clipboard.writeText(buildReport());h.textContent="Скопировано.";}
   catch(e){r.focus();r.select();h.textContent="Текст выделен — скопируйте жестом «Копировать».";}};
 if("serviceWorker" in navigator && location.protocol.startsWith("http")){
   navigator.serviceWorker.register("sw.js").then(reg=>{
