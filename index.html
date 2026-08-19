@@ -168,6 +168,7 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
     <option value="57.3119,25.2750,Europe/Riga">Цесис</option>
   </optgroup>
   <option value="55.7558,37.6173,Europe/Moscow">Москва</option>
+  <option value="geo" id="geoopt" style="display:none">Определённое место</option>
   <option value="saved" id="savedopt" style="display:none">Сохранённое место</option>
   <option value="custom">Свои координаты…</option>
 </select>
@@ -432,7 +433,14 @@ function buildReport(){
   if(S.length){
     t+="\n\nАСПЕКТЫ (рассчитанные)\n";
     t+=S.map(x=>`${x.name}:`+(x.list.length?"\n"+x.list.map(c=>
-      `    ${c.type} ${c.with}, орб ${c.orb}, ${c.status}`).join("\n"):"\n    нет")).join("\n");
+      `    ${c.type} ${c.with}, орб ${c.orb}, ${c.status}`).join("\n"):"\n    нет")+
+      (x.degree?"\n  достоинства градуса ("+x.degree.pos+"):\n"+x.degree.rulers.map(r=>
+        `    ${r.kind}: ${r.ruler}${r.own?" — своё":""}`).join("\n"):"")+
+      ((x.prohibitions&&x.prohibitions.length)?"\n  запрещения:\n"+x.prohibitions.map(p=>
+        `    ${p.type} ${p.with}: `+
+        (p.verdict==="свободен"?`свободен, до перфекции ${p.perfects}`
+         :p.verdict==="запрещение"?`запрещение — ${p.by.join("; ")} (до перфекции ${p.perfects})`
+         :`${p.verdict} — ${p.note}`)).join("\n"):"")).join("\n");
   }
   if(A.length){
     t+="\n\nАНТИСЫ (рассчитанные)\n";
@@ -475,6 +483,121 @@ function contacts(pt, skipName){
   return out.sort((a,b)=>a.orb-b.orb);
 }
 
+/* ---------- запрещение, рефранация, выход из знака ---------- */
+const SEVEN=["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn"];
+/* знаковое расхождение с целевым углом: ноль в момент перфекции */
+function sepTo(n1,n2,a,dd){
+  const l1=bodyLon(n1,dd), l2=bodyLon(n2,dd);
+  if(Math.abs(a)===180) return norm(l2-l1)-180;
+  return norm(l2-l1+180)-180-a;
+}
+function stepFor(n1,n2){ return (n1==="Moon"||n2==="Moon")?0.02:0.2; }
+/* дней до ближайшей перфекции аспекта ang между n1 и n2; null — не перфектится */
+function perfectIn(n1,n2,ang,d,horizon){
+  const arms=(ang===0||ang===180)?[ang]:[ang,-ang], st=stepFor(n1,n2);
+  let best=null;
+  for(const a of arms){
+    let prev=sepTo(n1,n2,a,d), t=0;
+    while(t<horizon){
+      t+=st;
+      const cur=sepTo(n1,n2,a,d+t);
+      if(Math.abs(cur-prev)>90){prev=cur;continue}
+      if(prev===0||(prev<0)!==(cur<0)){
+        let lo=t-st,hi=t;
+        for(let i=0;i<28;i++){const mid=(lo+hi)/2;
+          ((sepTo(n1,n2,a,d+lo)<0)!==(sepTo(n1,n2,a,d+mid)<0))?hi=mid:lo=mid;}
+        const tt=(lo+hi)/2; if(best===null||tt<best) best=tt;
+        break;
+      }
+      prev=cur;
+    }
+  }
+  return best;
+}
+/* дней до выхода планеты из своего знака */
+function signExit(n,d,horizon){
+  const sg=Math.floor(bodyLon(n,d)/30);
+  let t=0; const st=(n==="Moon")?0.05:0.5;
+  while(t<horizon){ t+=st; if(Math.floor(bodyLon(n,d+t)/30)!==sg){
+    let lo=t-st,hi=t;
+    for(let i=0;i<24;i++){const mid=(lo+hi)/2;
+      (Math.floor(bodyLon(n,d+mid)/30)!==sg)?hi=mid:lo=mid;}
+    return (lo+hi)/2; } }
+  return horizon;
+}
+function spd(n,dd){ return norm(bodyLon(n,dd+0.02)-bodyLon(n,dd-0.02)+180)-180; }
+/* станция (смена направления) в промежутке */
+function stationIn(n,d,t0){
+  if(n==="Sun"||n==="Moon") return false;
+  const st=0.5; let prev=spd(n,d);
+  for(let t=st;t<t0;t+=st){ const cur=spd(n,d+t);
+    if((prev<0)!==(cur<0)) return true; prev=cur; }
+  return false;
+}
+const HZ=400;
+/* разбор одного сходящегося аспекта: успеет ли перфектнуться и кто мешает */
+function prohibitionFor(x,d){
+  if(!x.applying) return null;
+  const A=x.a.name, B=x.b.name;
+  const exA=signExit(A,d,HZ), exB=signExit(B,d,HZ), lim=Math.min(exA,exB,HZ);
+  const t0=perfectIn(A,B,x.ang,d,lim);
+  if(t0===null){
+    const wide=perfectIn(A,B,x.ang,d,HZ);
+    if(stationIn(A,d,lim)||stationIn(B,d,lim))
+      return {ok:false,kind:"рефранация",
+        note:(stationIn(A,d,lim)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
+    const slow=exA<exB?A:B;
+    return {ok:false,kind:"выход из знака",
+      note:PRU[slow]+" покидает знак через "+degStr(arcToSignEnd(slow,d))+
+           ", а до точного аспекта "+degStr(arcTo(A,B,x.ang,d))+
+           " — завершиться не успевает"};
+  }
+  const hits=[];
+  for(const C of SEVEN){
+    if(C===A||C===B) continue;
+    const exC=signExit(C,d,HZ);
+    for(const tg of [A,B]){
+      const exT=tg===A?exA:exB, cap=Math.min(t0,exC,exT);
+      if(cap<=0) continue;
+      for(const [ang2,nm2,gl2] of ASPECTS){
+        const tc=perfectIn(C,tg,ang2,d,cap);
+        if(tc!==null&&tc>0.001&&tc<t0)
+          hits.push({who:C,to:tg,nm:nm2,gl:gl2,t:tc,arc:arcTo(C,tg,ang2,d)});
+      }
+    }
+  }
+  hits.sort((p,q)=>p.t-q.t);
+  const seen={}, uniq=hits.filter(h=>{const k=h.who+h.to; if(seen[k])return false; seen[k]=1; return true});
+  return {ok:uniq.length===0, kind:uniq.length?"запрещение":"свободен", t0,
+          arc:arcTo(A,B,x.ang,d), hits:uniq};
+}
+/* дуга до перфекции в градусах и минутах — считаем градусы, не часы */
+function degStr(g){
+  let dd=Math.floor(g), mm=Math.round((g-dd)*60);
+  if(mm===60){mm=0;dd++}
+  return dd+"°"+String(mm).padStart(2,"0")+"′";
+}
+/* дуга, оставшаяся паре до точного аспекта, на момент карты */
+function arcTo(n1,n2,ang,d){
+  const sep=Math.abs(norm(bodyLon(n1,d)-bodyLon(n2,d)+180)-180);
+  return Math.abs(sep-Math.abs(ang));
+}
+function arcToSignEnd(n,d){ const l=bodyLon(n,d); return 30-(l-Math.floor(l/30)*30); }
+
+/* достоинства градуса по таблице Птолемея: кто им владеет по каждому разряду */
+function degreeRulers(lon,dayChart){
+  const s=Math.floor(lon/30), deg=lon-s*30, out=[];
+  out.push(["Обитель",RUL[s]]);
+  let ex; for(const k in EXA) if(EXA[k]===s) ex=+k;
+  out.push(["Экзальтация",ex]);
+  const el=["fire","earth","air","water"][s%4];
+  out.push(["Триплицитет",TRIP[el][dayChart?0:1]]);
+  let tm; for(const [p,lim] of TERMS[s]) if(deg<lim){ tm=p; break }
+  out.push(["Терм",tm]);
+  out.push(["Фас",FACES[s][Math.floor(deg/10)]]);
+  return out;
+}
+
 function aspectsButtons(){
   return `<div class="btnrow">`+CHART.rows.map(r=>
     `<button class="chip" data-asp="${r.name}">${PGL[r.name]} ${PRU[r.name]}</button>`).join("")+
@@ -491,13 +614,57 @@ function showAspects(name){
         `<td class="${x.applying?"dig":"pk"}">${x.applying?"сходящийся":"расходящийся"}</td></tr>`;
     }).join("")+`</tbody></table></div>`
     :`<div class="pk">Аспектов в пределах орбов нет.</div>`;
+  /* разбор сходящихся: доходит ли аспект до перфекции и кто перехватывает свет */
+  const app=list.filter(x=>x.applying), pro=[];
+  let ph="";
+  if(app.length){
+    const rowsH=app.map(x=>{
+      const other=x.a.name===name?x.b:x.a;
+      const p=prohibitionFor(x,CHART.d);
+      let verdict, cls;
+      if(!p.ok&&p.kind==="запрещение"){
+        cls="deb";
+        verdict="запрещение: "+p.hits.map(h=>
+          `${PRU[h.who]} ${h.gl} ${PRU[h.to]}, осталось ${degStr(h.arc)}`).join("; ")+
+          `<div class="pk">до перфекции ${PRU[name]} ${x.gl} ${PRU[other.name]} — ${degStr(p.arc)}</div>`;
+      } else if(!p.ok){
+        cls="deb"; verdict=p.kind+"<div class=\"pk\">"+p.note+"</div>";
+      } else {
+        cls="dig"; verdict="свободен — до перфекции "+degStr(p.arc);
+      }
+      pro.push({with:PRU[other.name], type:x.nm, verdict:p.kind,
+        perfects: p.arc!==undefined?degStr(p.arc):null,
+        note: p.note||null,
+        by: p.hits?p.hits.map(h=>`${PRU[h.who]} ${h.nm} ${PRU[h.to]}, осталось ${degStr(h.arc)}`):[]});
+      return `<tr><td class="g">${PGL[name]}${x.gl}${PGL[other.name]}</td>`+
+        `<td>${PRU[other.name]}<div class="pk">${x.nm}</div></td>`+
+        `<td class="${cls}">${verdict}</td></tr>`;
+    }).join("");
+    ph=`<div class="pttitle" style="margin-top:14px">Запрещения</div>`+
+       `<div class="tw"><table><thead><tr><th></th><th>Аспект</th><th>Судьба</th></tr></thead><tbody>`+
+       rowsH+`</tbody></table></div>`+
+       `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — третья планета завершает свой аспект с одним из участников раньше и перехватывает свет; её дуга может быть и больше, если ход быстрее. Рефранация — участник поворачивает назад до перфекции. Выход из знака — аспект не успевает завершиться в текущих знаках.</div>`;
+  }
+  /* владельцы градуса по таблице Птолемея */
+  const me=CHART.rows.find(r=>r.name===name), pi=PIDX[name];
+  const dr=degreeRulers(me.lon,CHART.day);
+  const drh=`<div class="pttitle" style="margin-top:14px">Достоинства градуса</div>`+
+    `<div class="tw"><table><thead><tr><th>Разряд</th><th>Владелец</th><th></th></tr></thead><tbody>`+
+    dr.map(([k,idx])=>{
+      const own=idx===pi, nm=idx===undefined?"—":PN[idx];
+      return `<tr><td>${k}</td><td class="${own?"dig":""}">${nm}</td>`+
+        `<td class="pk">${own?"своё достоинство":(idx===undefined?"":"рецепция от "+PRU[name])}</td></tr>`;
+    }).join("")+`</tbody></table></div>`+
+    `<div class="hint">Термы Птолемея. Владелец градуса принимает планету по этому разряду: если он же значитель, налицо рецепция. Разряды идут по убыванию силы.</div>`;
   document.getElementById("asp-out").innerHTML=
     `<div class="ptbox"><div class="pttitle">Аспекты ${PRU[name]}</div>`+
-    `<div class="ptval">${fmtName(CHART.rows.find(r=>r.name===name).lon)}</div>${html}</div>`;
+    `<div class="ptval">${fmtName(me.lon)}</div>${html}${drh}${ph}</div>`;
   CALC.aspects[name]={name:PRU[name], list:list.map(x=>{
     const other=x.a.name===name?x.b:x.a;
     return {with:PRU[other.name], type:x.nm, orb:fmtOrb(x.orb),
-            status:x.applying?"сходящийся":"расходящийся"};})};
+            status:x.applying?"сходящийся":"расходящийся"};}), prohibitions:pro,
+    degree:{pos:fmtName(me.lon), rulers:dr.map(([k,idx])=>
+      ({kind:k, ruler:idx===undefined?"—":PN[idx], own:idx===pi}))}};
   syncExport();
 }
 
@@ -742,7 +909,7 @@ function build(){
         const dt=0.02;
         const sep2=Math.abs(norm(bodyLon(A.name,d+dt)-bodyLon(B.name,d+dt)+180)-180);
         const applying=Math.abs(sep2-a)<orb;
-        asp.push({a:A,b:B,nm,gl,orb,applying,max,outer});
+        asp.push({a:A,b:B,nm,gl,orb,applying,max,outer,ang:a});
       }
     }
   }
@@ -833,7 +1000,7 @@ function build(){
     `<span>UTC ${utc.toISOString().slice(0,16).replace("T"," ")} (${off>=0?"+":""}${off})</span>`+
     `<span>${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}</span>`+
     `<span>${dayChart?"дневная карта":"ночная карта"}</span>`;
-  CHART={rows:rows.filter(r=>!OUTERS.includes(r.name)), all:rows, cusps:c, day:dayChart, RN:RN};
+  CHART={rows:rows.filter(r=>!OUTERS.includes(r.name)), all:rows, cusps:c, day:dayChart, RN:RN, d:d};
   const MR=moonReport(d,c,rows);
   document.getElementById("moon").innerHTML=MR.html;
   document.getElementById("asp").innerHTML=aspectsButtons();
@@ -1004,6 +1171,12 @@ async function reverseGeocode(lat,lon){
   }catch(e){ clearTimeout(to); return null; }
 }
 
+/* показать определённое место отдельным пунктом списка городов */
+function setGeoOption(label){
+  const opt=document.getElementById("geoopt");
+  opt.style.display=""; opt.textContent=label;
+  preset.value="geo";
+}
 function refreshSavedOption(){
   const saved=loadSaved(), opt=document.getElementById("savedopt");
   if(saved){ opt.style.display=""; opt.textContent=`Сохранённое: ${saved.label} (${saved.lat.toFixed(4)}, ${saved.lon.toFixed(4)})`; }
@@ -1023,7 +1196,7 @@ function showTz(){
    а не из переменной, которую мог не обновить пропущенный обработчик */
 function syncLabel(){
   const v=preset.value;
-  if(v!=="custom"&&v!=="saved"&&preset.selectedIndex>=0)
+  if(v!=="custom"&&v!=="saved"&&v!=="geo"&&preset.selectedIndex>=0)
     locLabel=preset.options[preset.selectedIndex].textContent.trim();
   return locLabel;
 }
@@ -1045,6 +1218,7 @@ tzEl.onchange=()=>{
 };
 preset.onchange=()=>{
   if(preset.value==="custom"){locLabel="свои координаты";placeEl.focus();showLoc();return}
+  if(preset.value==="geo"){ showLoc(); return; }
   if(preset.value==="saved"){
     const s=loadSaved();
     if(s){ placeEl.value=s.lat.toFixed(4)+", "+s.lon.toFixed(4); tzEl.value=s.zone;
@@ -1086,14 +1260,14 @@ document.getElementById("geo").onclick=()=>{
   navigator.geolocation.getCurrentPosition(
     p=>{if(done)return;done=true;clearTimeout(to);
       placeEl.value=p.coords.latitude.toFixed(6)+", "+p.coords.longitude.toFixed(6);
-      preset.value="custom";
       let z="";try{z=Intl.DateTimeFormat().resolvedOptions().timeZone}catch(e){}
       if(z&&[...tzEl.options].some(o=>o.value===z)) tzEl.value=z;
       const acc=p.coords.accuracy?" ±"+Math.round(p.coords.accuracy)+" м":"";
       locLabel="определено устройством"+acc;
+      setGeoOption(locLabel);
       perr.textContent=""; showLoc("Определено");
       reverseGeocode(p.coords.latitude,p.coords.longitude).then(nm=>{
-        if(nm){ locLabel=nm+acc; showLoc("Определено"); }
+        if(nm){ locLabel=nm+acc; setGeoOption(locLabel); showLoc("Определено"); }
       });},
     ()=>{if(done)return;done=true;clearTimeout(to);perr.textContent=fail},
     {timeout:6000,maximumAge:0});
