@@ -114,6 +114,36 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 </header>
 
 <fieldset>
+<legend>Место</legend>
+<label for="preset">Город</label>
+<select id="preset">
+  <option value="33.2362,-96.8011,America/Chicago" selected>Prosper, TX</option>
+  <option value="32.9835,-96.8455,America/Chicago">Даллас (Midway Rd)</option>
+  <option value="56.9500,24.1000,Europe/Riga">Рига</option>
+  <optgroup label="Латвия — окрестности Риги">
+    <option value="56.6500,23.7167,Europe/Riga">Елгава</option>
+    <option value="57.1544,24.8600,Europe/Riga">Сигулда</option>
+    <option value="56.4083,24.1917,Europe/Riga">Бауска</option>
+    <option value="57.3119,25.2750,Europe/Riga">Цесис</option>
+  </optgroup>
+  <option value="55.7558,37.6173,Europe/Moscow">Москва</option>
+  <option value="geo" id="geoopt" style="display:none">Определённое место</option>
+  <option value="saved" id="savedopt" style="display:none">Сохранённое место</option>
+  <option value="custom">Свои координаты…</option>
+</select>
+<label for="place">Координаты</label>
+<input id="place" value="33.2362, -96.8011" placeholder="33.2362, -96.8011 или 33°14'10&quot;N 96°48'04&quot;W">
+<div class="hint">Вставка: нажмите на поле и удерживайте — появится «Вставить». Понимает десятичные и градусы-минуты-секунды; юг и запад — минусом или буквой S/W. При ручном вводе проверьте часовой пояс выше.</div>
+<div class="btns">
+  <button id="clear">Очистить для вставки</button>
+  <button id="geo">Определить</button>
+  <button id="savebtn">Сохранить это место</button>
+</div>
+<div id="perr" class="err"></div>
+<div id="locline" class="hint"></div>
+</fieldset>
+
+<fieldset>
 <legend>Момент</legend>
 <div class="row">
   <div><label for="date">Дата (ДД.ММ.ГГГГ)</label>
@@ -154,36 +184,6 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 <div class="btns"><button id="now">Сейчас</button></div>
 </fieldset>
 
-<fieldset>
-<legend>Место</legend>
-<label for="preset">Город</label>
-<select id="preset">
-  <option value="33.2362,-96.8011,America/Chicago" selected>Prosper, TX</option>
-  <option value="32.9835,-96.8455,America/Chicago">Даллас (Midway Rd)</option>
-  <option value="56.9500,24.1000,Europe/Riga">Рига</option>
-  <optgroup label="Латвия — окрестности Риги">
-    <option value="56.6500,23.7167,Europe/Riga">Елгава</option>
-    <option value="57.1544,24.8600,Europe/Riga">Сигулда</option>
-    <option value="56.4083,24.1917,Europe/Riga">Бауска</option>
-    <option value="57.3119,25.2750,Europe/Riga">Цесис</option>
-  </optgroup>
-  <option value="55.7558,37.6173,Europe/Moscow">Москва</option>
-  <option value="geo" id="geoopt" style="display:none">Определённое место</option>
-  <option value="saved" id="savedopt" style="display:none">Сохранённое место</option>
-  <option value="custom">Свои координаты…</option>
-</select>
-<label for="place">Координаты</label>
-<input id="place" value="33.2362, -96.8011" placeholder="33.2362, -96.8011 или 33°14'10&quot;N 96°48'04&quot;W">
-<div class="hint">Вставка: нажмите на поле и удерживайте — появится «Вставить». Понимает десятичные и градусы-минуты-секунды; юг и запад — минусом или буквой S/W. При ручном вводе проверьте часовой пояс выше.</div>
-<div class="btns">
-  <button id="clear">Очистить для вставки</button>
-  <button id="geo">Определить</button>
-  <button id="savebtn">Сохранить это место</button>
-</div>
-<div id="perr" class="err"></div>
-<div id="locline" class="hint"></div>
-</fieldset>
-
 <div id="sticky"><button class="primary" id="calc">Построить карту</button></div>
 
 <div id="out">
@@ -193,7 +193,7 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   <fieldset><legend>Луна</legend><div class="tw"><div id="moon"></div></div>
     <div class="hint">Без курса — если до выхода из знака Луна не совершает ни одного аспекта. Аспекты к Частям не в счёт. Via Combusta — от 15° Весов до 15° Скорпиона, Луна там тревожна, но не ослаблена.</div></fieldset>
   <fieldset><legend>Аспекты</legend><div id="asp"></div>
-    <div class="hint">Орбы по половинам светил Фроули, только семь планет. Нажмите планету, чтобы увидеть её аспекты.</div></fieldset>
+    <div class="hint">Орбы по половинам (moitié) Лилли, только семь планет. Сам Фроули списка орбов не приводит и считает его малополезным: в хораре важен точный аспект, успевающий завершиться до смены знака. Список здесь нужен лишь как фильтр, чтобы не тянуть в разбор далёкие аспекты. Нажмите планету, чтобы увидеть её аспекты.</div></fieldset>
   <fieldset><legend>Транссатурновые</legend><div class="tw"><div id="outers"></div></div>
     <div class="hint">По Фроули: как неподвижные звёзды — только соединение и оппозиция с планетами и значимыми куспидами, радиус 2°. Между собой не рассматриваются. Знаками не управляют.</div></fieldset>
   <fieldset><legend>Соединения с куспидами</legend><div class="tw"><div id="cusp-conj"></div></div>
@@ -300,6 +300,9 @@ function houseOf(l,c){
 const RUL=[5,3,2,1,0,2,3,5,4,6,6,4]; // индексы: 0 Sun,1 Moon,2 Merc,3 Ven,4 Jup,5 Mars,6 Sat
 const PIDX={Sun:0,Moon:1,Mercury:2,Venus:3,Mars:5,Jupiter:4,Saturn:6};
 const PN=["Солнце","Луна","Меркурий","Венера","Юпитер","Марс","Сатурн"];
+const PNG=["Солнца","Луны","Меркурия","Венеры","Юпитера","Марса","Сатурна"]; // родительный
+const PRG={Sun:"Солнца",Moon:"Луны",Mercury:"Меркурия",Venus:"Венеры",Mars:"Марса",
+  Jupiter:"Юпитера",Saturn:"Сатурна",Uranus:"Урана",Neptune:"Нептуна",Pluto:"Плутона",Node:"Узла"};
 const EXA={0:0,1:1,4:3,5:9,6:6,2:5,3:11}; // планета -> знак экзальтации
 const TERMS=[                                  // термы Птолемея (по Фроули)
  [[4,6],[3,14],[2,21],[5,26],[6,30]],  // Овен
@@ -315,7 +318,23 @@ const TERMS=[                                  // термы Птолемея (�
  [[6,6],[2,12],[3,20],[4,25],[5,30]],  // Водолей
  [[3,8],[4,14],[2,20],[5,26],[6,30]]]; // Рыбы
 const FACES=[[5,0,3],[2,1,6],[4,5,0],[3,2,1],[6,4,5],[0,3,2],[1,6,4],[5,0,3],[2,1,6],[4,5,0],[3,2,1],[6,4,5]];
-const TRIP={fire:[0,4,6],earth:[3,1,5],air:[6,2,4],water:[3,5,1]}; // день, ночь, партнёр
+const TRIP={fire:[0,4],earth:[3,1],air:[6,2],water:[5,5]}; // день, ночь (Фроули, гл. 6)
+/* отношения с Солнцем (Фроули, гл. 7):
+   казими 17′, сожжение 8°30′ — оба только в одном знаке с Солнцем;
+   под лучами до 17°30′ — знак не важен; оппозиция ±8° */
+function solarState(name,lon,sunLon,speed,sunSpeed){
+  if(name==="Sun") return null;
+  const sep=Math.abs(norm(lon-sunLon+180)-180);
+  const same=Math.floor(lon/30)===Math.floor(sunLon/30);
+  const toward=Math.abs(norm(lon+(speed-sunSpeed)*0.5-sunLon+180)-180)<sep;
+  const dir=toward?"подходит к Солнцу":"отходит от Солнца";
+  if(sep<=17/60&&same) return {k:"казими",cls:"dig",note:"в сердце Солнца"};
+  if(sep<=8.5&&same)   return {k:"сожжение",cls:"deb",note:dir};
+  if(sep<=17.5)        return {k:"под лучами",cls:"deb",note:dir};
+  const opp=Math.abs(sep-180);
+  if(opp<=8)           return {k:"в оппозиции к Солнцу",cls:"deb",note:""};
+  return null;
+}
 function dignities(pi,lon,dayChart){
   if(pi===undefined) return [];
   const s=Math.floor(lon/30), deg=lon-s*30, out=[];
@@ -435,7 +454,7 @@ function buildReport(){
     t+=S.map(x=>`${x.name}:`+(x.list.length?"\n"+x.list.map(c=>
       `    ${c.type} ${c.with}, орб ${c.orb}, ${c.status}`).join("\n"):"\n    нет")+
       (x.degree?"\n  достоинства градуса ("+x.degree.pos+"):\n"+x.degree.rulers.map(r=>
-        `    ${r.kind}: ${r.ruler}${r.own?" — своё":""}`).join("\n"):"")+
+        `    ${r.kind}: ${r.ruler}${r.note?" — "+r.note:""}`).join("\n"):"")+
       ((x.prohibitions&&x.prohibitions.length)?"\n  запрещения:\n"+x.prohibitions.map(p=>
         `    ${p.type} ${p.with}: `+
         (p.verdict==="свободен"?`свободен, до перфекции ${p.perfects}`
@@ -547,7 +566,7 @@ function prohibitionFor(x,d){
       return {ok:false,kind:"рефранация",
         note:(stationIn(A,d,lim)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
     const slow=exA<exB?A:B;
-    return {ok:false,kind:"выход из знака",
+    return {ok:false,kind:"фрустрация по знаку",
       note:PRU[slow]+" покидает знак через "+degStr(arcToSignEnd(slow,d))+
            ", а до точного аспекта "+degStr(arcTo(A,B,x.ang,d))+
            " — завершиться не успевает"};
@@ -561,14 +580,19 @@ function prohibitionFor(x,d){
       if(cap<=0) continue;
       for(const [ang2,nm2,gl2] of ASPECTS){
         const tc=perfectIn(C,tg,ang2,d,cap);
-        if(tc!==null&&tc>0.001&&tc<t0)
-          hits.push({who:C,to:tg,nm:nm2,gl:gl2,t:tc,arc:arcTo(C,tg,ang2,d)});
+        if(tc!==null&&tc>0.001&&tc<t0){
+          /* Фроули, гл. 9: если аспект уводит сам участник (он быстрее) —
+             это фрустрация; если перехватывает третья планета — запрещение */
+          const frus=Math.abs(spd(tg,d))>Math.abs(spd(C,d));
+          hits.push({who:C,to:tg,nm:nm2,gl:gl2,t:tc,arc:arcTo(C,tg,ang2,d),frus});
+        }
       }
     }
   }
   hits.sort((p,q)=>p.t-q.t);
   const seen={}, uniq=hits.filter(h=>{const k=h.who+h.to; if(seen[k])return false; seen[k]=1; return true});
-  return {ok:uniq.length===0, kind:uniq.length?"запрещение":"свободен", t0,
+  const anyPro=uniq.some(h=>!h.frus);
+  return {ok:uniq.length===0, kind:uniq.length?(anyPro?"запрещение":"фрустрация"):"свободен", t0,
           arc:arcTo(A,B,x.ang,d), hits:uniq};
 }
 /* дуга до перфекции в градусах и минутах — считаем градусы, не часы */
@@ -584,7 +608,7 @@ function arcTo(n1,n2,ang,d){
 }
 function arcToSignEnd(n,d){ const l=bodyLon(n,d); return 30-(l-Math.floor(l/30)*30); }
 
-/* достоинства градуса по таблице Птолемея: кто им владеет по каждому разряду */
+/* достоинства градуса по таблице Птолемея: управитель по каждому разряду */
 function degreeRulers(lon,dayChart){
   const s=Math.floor(lon/30), deg=lon-s*30, out=[];
   out.push(["Обитель",RUL[s]]);
@@ -645,17 +669,17 @@ function showAspects(name){
        rowsH+`</tbody></table></div>`+
        `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — третья планета завершает свой аспект с одним из участников раньше и перехватывает свет; её дуга может быть и больше, если ход быстрее. Рефранация — участник поворачивает назад до перфекции. Выход из знака — аспект не успевает завершиться в текущих знаках.</div>`;
   }
-  /* владельцы градуса по таблице Птолемея */
+  /* управители градуса по таблице Птолемея */
   const me=CHART.rows.find(r=>r.name===name), pi=PIDX[name];
   const dr=degreeRulers(me.lon,CHART.day);
   const drh=`<div class="pttitle" style="margin-top:14px">Достоинства градуса</div>`+
-    `<div class="tw"><table><thead><tr><th>Разряд</th><th>Владелец</th><th></th></tr></thead><tbody>`+
+    `<div class="tw"><table><thead><tr><th>Разряд</th><th>Управитель</th><th></th></tr></thead><tbody>`+
     dr.map(([k,idx])=>{
       const own=idx===pi, nm=idx===undefined?"—":PN[idx];
       return `<tr><td>${k}</td><td class="${own?"dig":""}">${nm}</td>`+
-        `<td class="pk">${own?"своё достоинство":(idx===undefined?"":"рецепция от "+PRU[name])}</td></tr>`;
+        `<td class="pk">${own?"своё достоинство":(idx===undefined?"":"рецепция от "+PNG[idx])}</td></tr>`;
     }).join("")+`</tbody></table></div>`+
-    `<div class="hint">Термы Птолемея. Владелец градуса принимает планету по этому разряду: если он же значитель, налицо рецепция. Разряды идут по убыванию силы.</div>`;
+    `<div class="hint">Термы Птолемея. Управитель градуса принимает планету по этому разряду: если он же сигнификатор другой стороны, налицо рецепция. Разряды идут по убыванию силы.</div>`;
   document.getElementById("asp-out").innerHTML=
     `<div class="ptbox"><div class="pttitle">Аспекты ${PRU[name]}</div>`+
     `<div class="ptval">${fmtName(me.lon)}</div>${html}${drh}${ph}</div>`;
@@ -664,7 +688,8 @@ function showAspects(name){
     return {with:PRU[other.name], type:x.nm, orb:fmtOrb(x.orb),
             status:x.applying?"сходящийся":"расходящийся"};}), prohibitions:pro,
     degree:{pos:fmtName(me.lon), rulers:dr.map(([k,idx])=>
-      ({kind:k, ruler:idx===undefined?"—":PN[idx], own:idx===pi}))}};
+      ({kind:k, ruler:idx===undefined?"—":PN[idx], own:idx===pi,
+        note:idx===undefined?"":(idx===pi?"своё достоинство":"рецепция от "+PNG[idx])}))}};
   syncExport();
 }
 
@@ -811,7 +836,8 @@ function moonReport(d,c,rows){
               const mid=(lo+hi)/2;
               ((signed(d+dir*lo,r.name,a)<0)!==(signed(d+dir*mid,r.name,a)<0))?hi=mid:lo=mid;
             }
-            const tt=(lo+hi)/2, rec={who:PRU[r.name],gl,nm,t:tt,lon:bodyLon("Moon",d+dir*tt)};
+            const tt=(lo+hi)/2, rec={who:PRU[r.name],gl,nm,t:tt,lon:bodyLon("Moon",d+dir*tt),
+                  arc:Math.abs(signed(d,r.name,a))};
             if(dir>0){ if(!next||rec.t<next.t) next=rec; }
             else     { if(!last||rec.t<last.t) last=rec; }
             break;
@@ -829,8 +855,8 @@ function moonReport(d,c,rows){
   let h=`<div class="ptbox"><div class="pttitle">Луна</div>`+
     `<div class="ptval">${fmtName(moon.lon)} · дом ${houseOf(moon.lon,c)} · ${moon.speed.toFixed(2)}°/сут · ${waxing?"прибывает":"убывает"}</div>`;
   h+=`<table><tbody>`;
-  h+=`<tr><td>Последний аспект</td><td>${last?`${last.gl} ${last.who}, ${last.nm}, ${hrs(last.t)} назад`:"нет в этом знаке"}</td></tr>`;
-  h+=`<tr><td>Следующий аспект</td><td>${next?`${next.gl} ${next.who}, ${next.nm}, через ${hrs(next.t)}`:"—"}</td></tr>`;
+  h+=`<tr><td>Последний аспект</td><td>${last?`${last.gl} ${last.who}, ${last.nm}, ${degStr(last.arc)} назад`:"нет в этом знаке"}</td></tr>`;
+  h+=`<tr><td>Следующий аспект</td><td>${next?`${next.gl} ${next.who}, ${next.nm}, через ${degStr(next.arc)}`:"—"}</td></tr>`;
   h+=`<tr><td>Без курса</td><td class="${voc?"deb":"pk"}">${voc?"да — до конца знака аспектов нет":"нет"}</td></tr>`;
   h+=`<tr><td>Via Combusta</td><td class="${vc?"deb":"pk"}">${vc?"да — 15 Весов … 15 Скорпиона":"нет"}</td></tr>`;
   h+=`</tbody></table></div>`;
@@ -866,7 +892,12 @@ function build(){
   const order=["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Uranus","Neptune","Pluto"];
   const sun=bodyLon("Sun",d);
   const sunHouse=houseOf(sun,c);
-  const dayChart=(sunHouse>=7&&sunHouse<=12);
+  /* день — Солнце над горизонтом; Фроули даёт запас в несколько градусов
+     в пользу дня по обе стороны от ASC и DESC (гл. 6) */
+  const TWI=5;
+  const nearAsc=Math.abs(norm(sun-c[0]+180)-180)<=TWI,
+        nearDsc=Math.abs(norm(sun-c[6]+180)-180)<=TWI;
+  const dayChart=(sunHouse>=7&&sunHouse<=12)||nearAsc||nearDsc;
   const rows=[];
   for(const n of order){
     const l=bodyLon(n,d), l2=bodyLon(n,d+0.02), sp=norm(l2-l+180)-180;
@@ -882,6 +913,7 @@ function build(){
   for(const r of rows.concat(extra)){
     const pi=PIDX[r.name];
     const dg=dignities(pi,r.lon,dayChart);
+    const ss=solarState(r.name,r.lon,sun,r.speed,rows.find(q=>q.name==="Sun").speed);
     const dgs=dg.length?dg.map(x=>`<span class="${x[1]==="+"?"dig":"deb"}">${x[0]}</span>`).join(", ")
       :`<span class="pk">перегрин</span>`;
     const dispositor=pi!==undefined?`<div class="pk">диспозитор: ${PN[RUL[Math.floor(r.lon/30)]]}</div>`:"";
@@ -889,7 +921,7 @@ function build(){
        `<td>${fmtName(r.lon)}${r.retro&&r.name!=="Node"?' <span class="rx">R</span>':""}</td>`+
        `<td>${houseOf(r.lon,c)}</td>`+
        `<td>${pi===undefined?"—":(r.speed>=0?"+":"")+r.speed.toFixed(2)+"°"}</td>`+
-       `<td>${pi===undefined?"—":dgs}</td></tr>`;
+       `<td>${pi===undefined?"—":dgs}${ss?`<div class="${ss.cls}">${ss.k}${ss.note?` <span class="pk">${ss.note}</span>`:""}</div>`:""}</td></tr>`;
   }
   t+=`</tbody></table>`;
   document.getElementById("tbl").innerHTML=t;
@@ -1019,8 +1051,10 @@ function build(){
   L.push("ПЛАНЕТЫ");
   for(const r of rows.concat(extra)){
     const pi=PIDX[r.name], dg=dignities(pi,r.lon,dayChart);
+    const ss=solarState(r.name,r.lon,sun,r.speed,rows.find(q=>q.name==="Sun").speed);
     L.push(`${PRU[r.name].padEnd(14)} ${fmtName(r.lon)}${r.retro&&r.name!=="Node"?" R":"  "}  дом ${houseOf(r.lon,c)}`+
-      (pi===undefined?"":`  ${dg.length?dg.map(x=>x[0]).join(", "):"перегрин"}`));
+      (pi===undefined?"":`  ${dg.length?dg.map(x=>x[0]).join(", "):"перегрин"}`)+
+      (ss?`  · ${ss.k}${ss.note?" ("+ss.note+")":""}`:""));
   }
   L.push("");
   L.push("КУСПИДЫ");
