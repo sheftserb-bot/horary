@@ -104,6 +104,14 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
   font-family:ui-monospace,monospace;margin-bottom:4px}
 .ptval{font-family:ui-monospace,monospace;font-size:15px;margin-bottom:6px}
 .ptbox .hint{margin-top:8px}
+
+#scrub{border-top:1px solid var(--line);padding-top:10px;margin-top:6px}
+.scrubrow{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.scrubrow .chip{flex:1 1 0;min-width:56px;text-align:center;padding:9px 6px}
+.scrubnav .chip{font-size:14px;padding:11px 6px}
+#sc-info{margin-top:2px}
+body.shifted #wheel{outline:2px solid var(--oxide);outline-offset:2px}
+#sc-info.warn{color:var(--oxide)}
 </style>
 </head>
 <body>
@@ -187,7 +195,24 @@ body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-i
 <div id="sticky"><button class="primary" id="calc">Построить карту</button></div>
 
 <div id="out">
-  <fieldset style="margin-top:18px"><legend>Карта</legend><div id="wheel"></div></fieldset>
+  <fieldset style="margin-top:18px"><legend>Карта</legend>
+    <div id="wheel"></div>
+    <div id="scrub">
+      <div class="scrubrow">
+        <button class="chip sc-unit on" data-unit="min">мин</button>
+        <button class="chip sc-unit" data-unit="hour">час</button>
+        <button class="chip sc-unit" data-unit="day">сут</button>
+        <button class="chip sc-unit" data-unit="week">нед</button>
+        <button class="chip sc-unit" data-unit="month">мес</button>
+      </div>
+      <div class="scrubrow scrubnav">
+        <button class="chip sc-go" data-dir="-1">◀◀</button>
+        <button class="chip sc-go" data-dir="1">▶▶</button>
+        <button class="chip" id="sc-reset">Радикс</button>
+      </div>
+      <div id="sc-info" class="hint">Прокрутка выключена — карта на момент вопроса.</div>
+    </div>
+  </fieldset>
   <fieldset><legend>Планеты</legend><div class="tw"><div id="tbl"></div></div>
     <div class="hint">Достоинства по таблице Птолемея: обитель, экзальтация, триплицитет, терм, фас, изгнание, падение. Термы — Птолемея, фасы — халдейские, триплицитет — по дню и ночи.</div></fieldset>
   <fieldset><legend>Луна</legend><div class="tw"><div id="moon"></div></div>
@@ -401,46 +426,102 @@ function localToUTC(y,mo,da,hh,mi,zone){
   return guess;
 }
 
-/* ---------- колесо ---------- */
+/* ---------- колесо (визуально по образцу Zet) ---------- */
 function wheel(c,planets){
-  const R=250,cx=270,cy=270,rOut=R,rSign=R-30,rHouse=R-64,rIn=86;
+  const cx=310,cy=310,rOut=245,rSig=212,rIn=36;
+  const BLUE="#000080", MAG="#FF00FF", RED="#E00000", CYAN="#00A8B8", INK="#000060";
   const asc=c[0];
-  const ang=l=>norm(180+(l-asc))*RAD; // ASC слева, дома против часовой стрелки
+  const ang=l=>norm(180+(l-asc))*RAD;              // ASC слева, дома против часовой
   const P=(r,l)=>[cx+r*Math.cos(ang(l)),cy-r*Math.sin(ang(l))];
-  let s=`<svg viewBox="0 0 540 540" role="img" aria-label="Колесо хорарной карты">`;
-  s+=`<circle cx="${cx}" cy="${cy}" r="${rOut}" fill="none" stroke="#C9A34E" stroke-width="1.2"/>`;
-  s+=`<circle cx="${cx}" cy="${cy}" r="${rSign}" fill="none" stroke="#8A6F35" stroke-width="1"/>`;
-  s+=`<circle cx="${cx}" cy="${cy}" r="${rHouse}" fill="none" stroke="#2C3742"/>`;
-  s+=`<circle cx="${cx}" cy="${cy}" r="${rIn}" fill="none" stroke="#2C3742"/>`;
+  const ln=(r1,r2,l,st,w)=>{const a=P(r1,l),b=P(r2,l);
+    return `<line x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}" stroke="${st}" stroke-width="${w||1}"/>`};
+  const deg=l=>{const v=Math.round(l%30);return v===30?0:v};
+  const dm=l=>{const x=l-Math.floor(l/30)*30;let d=Math.floor(x),m=Math.round((x-d)*60);
+    if(m===60){m=0;d++} return d+"°"+String(m).padStart(2,"0")+"′"};
+
+  let s=`<svg viewBox="0 0 620 620" role="img" aria-label="Колесо хорарной карты">`;
+  s+=`<rect x="0" y="0" width="620" height="620" fill="#FFFFFF"/>`;
+  s+=`<g font-family="Georgia,'Times New Roman',serif">`;
+
+  /* окружности */
+  for(const r of [rOut,rSig,rIn])
+    s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${BLUE}" stroke-width="1.2"/>`;
+
+  /* кольцо знаков: границы, деления по 5°, глифы */
   for(let i=0;i<12;i++){
-    const l=i*30, a=P(rOut,l), b=P(rSign,l);
-    s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="#8A6F35"/>`;
-    const g=P(rSign+15,l+15);
-    s+=`<text x="${g[0]}" y="${g[1]+6}" fill="#C9A34E" font-size="17" text-anchor="middle">${SGL[i]}</text>`;
+    s+=ln(rOut,rSig,i*30,BLUE,1.2);
+    for(let k=5;k<30;k+=5) s+=ln(rSig,rSig+(k%10?6:10),i*30+k,BLUE,.7);
+    const g=P((rOut+rSig)/2,i*30+15);
+    s+=`<text x="${g[0].toFixed(1)}" y="${(g[1]+7).toFixed(1)}" fill="${BLUE}" font-size="21" text-anchor="middle">${SGL[i]}\uFE0E</text>`;
   }
+
+  /* куспиды домов */
+  const RN=["Asc","II","III","IC","V","VI","Dsc","VIII","IX","MC","XI","XII"];
   for(let i=0;i<12;i++){
-    const l=c[i], a=P(rSign,l), b=P(rIn,l), major=(i%3===0);
-    s+=`<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${major?"#C9A34E":"#3B4854"}" stroke-width="${major?1.4:1}"/>`;
-    const mid=norm(c[i]+norm(c[(i+1)%12]-c[i])/2), t=P(rIn+16,mid);
-    s+=`<text x="${t[0]}" y="${t[1]+4}" fill="#93A0AC" font-size="11" text-anchor="middle" font-family="monospace">${i+1}</text>`;
-    const cu=P(rHouse+13,l+1.5);
-    s+=`<text x="${cu[0]}" y="${cu[1]+3}" fill="#93A0AC" font-size="9" text-anchor="middle" font-family="monospace">${fmt(l)}</text>`;
+    const l=c[i], axis=(i%3===0);
+    if(!axis) s+=ln(rIn,rSig,l,MAG,1);
+    /* подпись за внешней окружностью */
+    const t=P(rOut+18,l), a=ang(l), right=Math.cos(a)>=0, dy=(i===0||i===6)?16:4;
+    s+=`<text x="${t[0].toFixed(1)}" y="${(t[1]+dy).toFixed(1)}" fill="${BLUE}" font-size="12"`+
+       ` text-anchor="${Math.abs(Math.cos(a))<.25?"middle":(right?"start":"end")}"`+
+       ` font-family="ui-monospace,monospace">${RN[i]}<tspan font-size="9" dy="-4" dx="2">${deg(l)}</tspan></text>`;
   }
-  const used=[];
-  for(const p of planets){
-    let l=p.lon, shift=0;
-    while(used.some(u=>Math.abs(norm(u-l+180)-180)<7)&&shift<9){shift++;l=norm(l+7)}
-    used.push(l);
-    const g=P(rHouse-26,l), tick=P(rHouse,p.lon), tick2=P(rHouse-8,p.lon);
-    s+=`<line x1="${tick[0]}" y1="${tick[1]}" x2="${tick2[0]}" y2="${tick2[1]}" stroke="#93A0AC"/>`;
-    s+=`<text x="${g[0]}" y="${g[1]+7}" fill="${p.retro?"#C0532F":"#E9E3D3"}" font-size="20" text-anchor="middle">${PGL[p.name]}</text>`;
-    const d=P(rHouse-46,l);
-    s+=`<text x="${d[0]}" y="${d[1]+4}" fill="#93A0AC" font-size="9" text-anchor="middle" font-family="monospace">${Math.floor(p.lon%30)}°${p.retro?" R":""}</text>`;
+  /* ось MC — IC тёмно-синим, ось ASC — DSC красным поверх всего */
+  s+=ln(rIn,rSig,c[9],BLUE,1.8)+ln(rIn,rSig,c[3],BLUE,1.8);
+  const a1=P(rSig,c[0]),a2=P(rSig,c[6]);
+  s+=`<line x1="${a1[0].toFixed(1)}" y1="${a1[1].toFixed(1)}" x2="${a2[0].toFixed(1)}" y2="${a2[1].toFixed(1)}" stroke="${RED}" stroke-width="1.6"/>`;
+  /* стрелка на ASC */
+  const p0=P(rOut+20,c[0]), p1=P(rSig,c[0]);
+  s+=`<line x1="${p1[0].toFixed(1)}" y1="${p1[1].toFixed(1)}" x2="${p0[0].toFixed(1)}" y2="${p0[1].toFixed(1)}" stroke="${RED}" stroke-width="1.6"/>`;
+  const aa=ang(c[0]), hx=p0[0], hy=p0[1], w=7, h=14;
+  s+=`<polygon fill="${RED}" points="${hx.toFixed(1)},${hy.toFixed(1)} `+
+     `${(hx-h*Math.cos(aa)-w*Math.sin(aa)).toFixed(1)},${(hy+h*Math.sin(aa)-w*Math.cos(aa)).toFixed(1)} `+
+     `${(hx-h*Math.cos(aa)+w*Math.sin(aa)).toFixed(1)},${(hy+h*Math.sin(aa)+w*Math.cos(aa)).toFixed(1)}"/>`;
+
+  /* планеты: два ряда, внутри ряда — мягкая раздвижка без ухода от своего градуса */
+  const R0=126, R1=178, MG0=21, MG1=15;      // радиусы рядов и минимальный зазор в градусах
+  const list=planets.map((p,i)=>({p,lon:p.lon,i})).sort((x,y)=>x.lon-y.lon);
+  /* разворачиваем в непрерывную шкалу и режем на скопления */
+  const un=[]; let acc=list.length?list[0].lon:0;
+  for(let k=0;k<list.length;k++){
+    if(k){ let dl=list[k].lon-list[k-1].lon; if(dl<0) dl+=360; acc+=dl }
+    un.push(acc);
   }
-  const A=P(rOut,c[0]), M=P(rOut,c[9]);
-  s+=`<text x="${A[0]-14}" y="${A[1]-6}" fill="#C9A34E" font-size="11" font-family="monospace">ASC</text>`;
-  s+=`<text x="${M[0]-8}" y="${M[1]-8}" fill="#C9A34E" font-size="11" font-family="monospace">MC</text>`;
-  s+=`</svg>`;
+  const cl=[]; let cur=[0];
+  for(let k=1;k<list.length;k++){
+    if(un[k]-un[k-1]<20) cur.push(k); else { cl.push(cur); cur=[k] }
+  }
+  if(cur.length) cl.push(cur);
+  /* замыкание круга: первое и последнее скопление могут быть одним */
+  if(cl.length>1 && (un[0]+360)-un[un.length-1]<20){
+    cl[0]=cl[cl.length-1].concat(cl[0]); cl.pop();
+  }
+  const slot=new Array(list.length);
+  for(const g of cl){
+    for(const ring of [0,1]){
+      const mem=g.filter((_,j)=>j%2===ring);
+      if(!mem.length) continue;
+      const MG=ring?MG1:MG0;
+      const pos=mem.map(k=>un[k]+(g.indexOf(k)<g.length&&un[k]<un[g[0]]?360:0));
+      for(let j=1;j<pos.length;j++) if(pos[j]-pos[j-1]<MG) pos[j]=pos[j-1]+MG;
+      const c0=mem.reduce((a,k,j)=>a+ (un[k]<un[g[0]]?un[k]+360:un[k]),0)/mem.length;
+      const c1=pos.reduce((a,v)=>a+v,0)/pos.length;
+      mem.forEach((k,j)=>slot[k]={lon:norm(pos[j]-c1+c0), R:ring?R1:R0});
+    }
+  }
+  for(let k=0;k<list.length;k++){
+    const p=list[k].p, sl=slot[k]||{lon:list[k].lon,R:R0};
+    const pt=P(sl.R,sl.lon);
+    s+=ln(rIn,rIn+8,p.lon,CYAN,1);
+    const t1=P(rIn+8,p.lon);
+    const dx=pt[0]-t1[0], dy=pt[1]-t1[1], len=Math.hypot(dx,dy)||1, back=17;
+    s+=`<line x1="${t1[0].toFixed(1)}" y1="${t1[1].toFixed(1)}" x2="${(pt[0]-dx/len*back).toFixed(1)}" y2="${(pt[1]-dy/len*back).toFixed(1)}" stroke="${CYAN}" stroke-width="1"/>`;
+    s+=`<text x="${pt[0].toFixed(1)}" y="${(pt[1]+4).toFixed(1)}" fill="${INK}" font-size="21" text-anchor="middle">${PGL[p.name]}\uFE0E</text>`;
+    if(p.retro&&p.name!=="Node"&&p.name!=="SNode")
+      s+=`<text x="${(pt[0]+12).toFixed(1)}" y="${(pt[1]+9).toFixed(1)}" fill="${RED}" font-size="9" font-family="ui-monospace,monospace">R</text>`;
+    s+=`<text x="${pt[0].toFixed(1)}" y="${(pt[1]+19).toFixed(1)}" fill="${INK}" font-size="10" text-anchor="middle" font-family="ui-monospace,monospace">${dm(p.lon)}</text>`;
+  }
+  s+=`</g></svg>`;
   return s;
 }
 
@@ -887,6 +968,75 @@ function moonReport(d,c,rows){
   return {html:h, voc, vc, waxing, next, last};
 }
 
+/* ---------- прокрутка времени ---------- */
+/* месяцы считаем календарём, остальное — в миллисекундах */
+let OFF={mo:0,ms:0}, SC_UNIT="min";
+const SC_MS={min:60000,hour:3600000,day:86400000,week:604800000};
+function offActive(){ return OFF.mo!==0||OFF.ms!==0 }
+function applyOffset(u){
+  if(!offActive()) return u;
+  const t=new Date(u.getTime());
+  if(OFF.mo){ const day=t.getUTCDate();
+    t.setUTCMonth(t.getUTCMonth()+OFF.mo);
+    if(t.getUTCDate()<day) t.setUTCDate(0);   // 31-е → последний день короткого месяца
+  }
+  return new Date(t.getTime()+OFF.ms);
+}
+function offLabel(){
+  const out=[];
+  if(OFF.mo) out.push((OFF.mo>0?"+":"−")+Math.abs(OFF.mo)+" мес");
+  if(OFF.ms){
+    let v=Math.abs(OFF.ms), sg=OFF.ms>0?"+":"−", p=[];
+    const dd=Math.floor(v/86400000); v-=dd*86400000;
+    const hh=Math.floor(v/3600000);  v-=hh*3600000;
+    const mm=Math.round(v/60000);
+    if(dd) p.push(dd+" сут"); if(hh) p.push(hh+" ч"); if(mm) p.push(mm+" мин");
+    out.push(sg+" "+p.join(" "));
+  }
+  return out.join(" ")||"0";
+}
+function scrubInfo(utc0,utc,zone){
+  const el=document.getElementById("sc-info");
+  document.body.classList.toggle("shifted",offActive());
+  if(!offActive()){
+    el.className="hint";
+    el.textContent="Прокрутка выключена — карта на момент вопроса.";
+    return;
+  }
+  const off=tzOffset(utc,zone), loc=new Date(utc.getTime()+off*3600000);
+  const p=n=>String(n).padStart(2,"0");
+  el.className="hint warn";
+  el.innerHTML=`Смещение ${offLabel()} — карта на `+
+    `${p(loc.getUTCDate())}.${p(loc.getUTCMonth()+1)}.${loc.getUTCFullYear()} `+
+    `${p(loc.getUTCHours())}:${p(loc.getUTCMinutes())}. `+
+    `Это просмотр движения планет, а не карта для суждения — судить только по радиксу.`;
+}
+function scrubStep(dir){
+  if(SC_UNIT==="month") OFF.mo+=dir; else OFF.ms+=dir*SC_MS[SC_UNIT];
+  build();
+}
+document.addEventListener("click",e=>{
+  const u=e.target.closest(".sc-unit");
+  if(u){ SC_UNIT=u.dataset.unit;
+    document.querySelectorAll(".sc-unit").forEach(b=>b.classList.toggle("on",b===u));
+    return; }
+  const g=e.target.closest(".sc-go");
+  if(g){ scrubStep(+g.dataset.dir); return; }
+  if(e.target.closest("#sc-reset")){ OFF={mo:0,ms:0}; build(); }
+});
+/* удержание — непрерывная прокрутка */
+(function(){
+  let tm=null,iv=null;
+  const stop=()=>{clearTimeout(tm);clearInterval(iv);tm=iv=null};
+  document.addEventListener("pointerdown",e=>{
+    const g=e.target.closest(".sc-go"); if(!g) return;
+    const dir=+g.dataset.dir;
+    tm=setTimeout(()=>{iv=setInterval(()=>scrubStep(dir),200)},450);
+  });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>
+    document.addEventListener(ev,stop));
+})();
+
 /* ---------- сборка ---------- */
 function build(){
   const dv=document.getElementById("date").value, tv=document.getElementById("time").value;
@@ -901,7 +1051,8 @@ function build(){
   if(!tm){perr.textContent="Время в формате ЧЧ:ММ по 24-часовой шкале, например 13:37";return}
   const da=+dm[1], mo=+dm[2], y=+dm[3], hh=+tm[1], mi=+tm[2];
   if(mo<1||mo>12||da<1||da>31||hh>23||mi>59){perr.textContent="Недопустимая дата или время.";return}
-  const utc=localToUTC(y,mo,da,hh,mi,zone);
+  const utc0=localToUTC(y,mo,da,hh,mi,zone);
+  const utc=applyOffset(utc0);
   const jd=utc.getTime()/86400000+2440587.5, d=jd-2451543.5;
   const ut=utc.getUTCHours()+utc.getUTCMinutes()/60+utc.getUTCSeconds()/3600;
 
@@ -1055,7 +1206,9 @@ function build(){
   document.getElementById("stamp").innerHTML=
     `<span>UTC ${utc.toISOString().slice(0,16).replace("T"," ")} (${off>=0?"+":""}${off})</span>`+
     `<span>${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}</span>`+
-    `<span>${dayChart?"дневная карта":"ночная карта"}</span>`;
+    `<span>${dayChart?"дневная карта":"ночная карта"}</span>`+
+    (offActive()?`<span class="err">прокрутка ${offLabel()} от радикса</span>`:``);
+  scrubInfo(utc0,utc,zone);
   CHART={rows:rows.filter(r=>!OUTERS.includes(r.name)), all:rows, cusps:c, day:dayChart, RN:RN, d:d};
   const MR=moonReport(d,c,rows);
   document.getElementById("moon").innerHTML=MR.html;
