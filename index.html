@@ -540,7 +540,7 @@ function buildReport(){
         `    ${r.kind}: ${r.ruler}${r.note?" — "+r.note:""}`).join("\n"):"")+
       ((x.prohibitions&&x.prohibitions.length)?"\n  запрещения:\n"+x.prohibitions.map(p=>
         `    ${p.type} ${p.with}: `+
-        (p.verdict==="свободен"?`свободен, до перфекции ${p.perfects}`
+        (p.verdict.startsWith("свободен")?`свободен, до перфекции ${p.perfects}`+(p.note?` — ${p.note}`:"")
          :p.verdict==="запрещение"?`запрещение — ${p.by.join("; ")} (до перфекции ${p.perfects})`
          :`${p.verdict} — ${p.note}`)).join("\n"):"")).join("\n");
   }
@@ -642,19 +642,29 @@ const HZ=400;
 function prohibitionFor(x,d){
   if(!x.applying) return null;
   const A=x.a.name, B=x.b.name;
-  const exA=signExit(A,d,HZ), exB=signExit(B,d,HZ), lim=Math.min(exA,exB,HZ);
-  const t0=perfectIn(A,B,x.ang,d,lim);
+  const exA=signExit(A,d,HZ), exB=signExit(B,d,HZ);
+  /* Перфекцию ищем по полному горизонту. Смена знака сама по себе аспект
+     не отменяет: значение имеет лишь то, доходит ли пара до точного аспекта. */
+  const t0=perfectIn(A,B,x.ang,d,HZ);
   if(t0===null){
-    const wide=perfectIn(A,B,x.ang,d,HZ);
-    if(stationIn(A,d,lim)||stationIn(B,d,lim))
+    if(stationIn(A,d,HZ)||stationIn(B,d,HZ))
       return {ok:false,kind:"рефранация",
-        note:(stationIn(A,d,lim)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
-    const slow=exA<exB?A:B;
-    return {ok:false,kind:"фрустрация по знаку",
-      note:PRU[slow]+" покидает знак через "+degStr(arcToSignEnd(slow,d))+
-           ", а до точного аспекта "+degStr(arcTo(A,B,x.ang,d))+
-           " — завершиться не успевает"};
+        note:(stationIn(A,d,HZ)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
+    return {ok:false,kind:"аспект не состоится",
+      note:"до точного аспекта "+degStr(arcTo(A,B,x.ang,d))+
+           ", но пара расходится раньше — перфекции нет"};
   }
+  /* рефранация: разворот участника до перфекции */
+  if(stationIn(A,d,t0)||stationIn(B,d,t0))
+    return {ok:false,kind:"рефранация",
+      note:(stationIn(A,d,t0)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
+  /* перфекция за границей текущего знака — аспект действителен,
+     но событие приходит по смене обстоятельств */
+  const crossA=exA<t0, crossB=exB<t0;
+  const crossNote=(crossA||crossB)
+    ? (crossA&&crossB?PRU[A]+" и "+PRU[B]+" меняют знак":PRU[crossA?A:B]+" меняет знак")+
+      " до перфекции — аспект состоится, но уже в следующем знаке"
+    : null;
   const hits=[];
   for(const C of SEVEN){
     if(C===A||C===B) continue;
@@ -676,8 +686,10 @@ function prohibitionFor(x,d){
   hits.sort((p,q)=>p.t-q.t);
   const seen={}, uniq=hits.filter(h=>{const k=h.who+h.to; if(seen[k])return false; seen[k]=1; return true});
   const anyPro=uniq.some(h=>!h.frus);
-  return {ok:uniq.length===0, kind:uniq.length?(anyPro?"запрещение":"фрустрация"):"свободен", t0,
-          arc:arcTo(A,B,x.ang,d), hits:uniq};
+  return {ok:uniq.length===0,
+          kind:uniq.length?(anyPro?"запрещение":"фрустрация")
+                          :(crossNote?"свободен (перфекция в следующем знаке)":"свободен"),
+          t0, arc:arcTo(A,B,x.ang,d), hits:uniq, cross:crossNote};
 }
 /* дуга до перфекции в градусах и минутах — считаем градусы, не часы */
 function degStr(g){
@@ -738,11 +750,12 @@ function showAspects(name){
       } else if(!p.ok){
         cls="deb"; verdict=p.kind+"<div class=\"pk\">"+p.note+"</div>";
       } else {
-        cls="dig"; verdict="свободен — до перфекции "+degStr(p.arc);
+        cls="dig"; verdict="свободен — до перфекции "+degStr(p.arc)+
+          (p.cross?"<div class=\"pk\">"+p.cross+"</div>":"");
       }
       pro.push({with:PRU[other.name], type:x.nm, verdict:p.kind,
         perfects: p.arc!==undefined?degStr(p.arc):null,
-        note: p.note||null,
+        note: p.note||p.cross||null,
         by: p.hits?p.hits.map(h=>`${PRU[h.who]} ${h.nm} ${PRU[h.to]}, осталось ${degStr(h.arc)}`):[]});
       return `<tr><td class="g">${PGL[name]}${x.gl}${PGL[other.name]}</td>`+
         `<td>${PRU[other.name]}<div class="pk">${x.nm}</div></td>`+
@@ -751,7 +764,7 @@ function showAspects(name){
     ph=`<div class="pttitle" style="margin-top:14px">Запрещения</div>`+
        `<div class="tw"><table><thead><tr><th></th><th>Аспект</th><th>Судьба</th></tr></thead><tbody>`+
        rowsH+`</tbody></table></div>`+
-       `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — третья планета завершает свой аспект с одним из участников раньше и перехватывает свет; её дуга может быть и больше, если ход быстрее. Рефранация — участник поворачивает назад до перфекции. Выход из знака — аспект не успевает завершиться в текущих знаках.</div>`;
+       `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — третья планета завершает свой аспект с одним из участников раньше и перехватывает свет; её дуга может быть и больше, если ход быстрее. Рефранация — участник поворачивает назад до перфекции. Смена знака сама по себе аспект не отменяет: если перфекция приходится на следующий знак, аспект состоится, но по смене обстоятельств — это отмечено отдельной строкой. Аспект не состоится — пара расходится, точного аспекта нет вовсе.</div>`;
   }
   /* управители градуса по таблице Птолемея */
   const me=CHART.rows.find(r=>r.name===name), pi=PIDX[name];
