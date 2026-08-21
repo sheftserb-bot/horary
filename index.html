@@ -318,6 +318,20 @@ function houses(d,ut,lat,lon){
   c[6]=norm(c[0]+180); c[7]=norm(c[1]+180); c[8]=norm(c[2]+180);
   return {cusps:c, ramc, ecl, lst};
 }
+/* Фроули, гл. 3, с. 40: планета в последних пяти градусах дома относится
+   к следующему дому — но только если она в том же знаке, что и его куспид.
+   Интервал гибкий, поэтому дом не подменяем: возвращаем дугу до куспида,
+   решение остаётся за астрологом. null — планета не в палисаднике. */
+const PORCH=5;
+const RN0=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
+function porchOf(l,c){
+  for(let i=0;i<12;i++){
+    const gap=norm(c[i]-l);
+    if(gap>0&&gap<=PORCH&&Math.floor(l/30)===Math.floor(c[i]/30))
+      return {house:i+1, arc:gap};
+  }
+  return null;
+}
 function houseOf(l,c){
   for(let i=0;i<12;i++){const a=c[i],b=c[(i+1)%12];if(norm(l-a)<norm(b-a)||norm(b-a)===0)return i+1}
   return 1;
@@ -640,6 +654,14 @@ function stationIn(n,d,t0){
     if((prev<0)!==(cur<0)) return true; prev=cur; }
   return false;
 }
+/* разворот именно в ретроградность: директ → ретро */
+function turnsRetro(n,d,t0){
+  if(n==="Sun"||n==="Moon") return false;
+  const st=0.5; let prev=spd(n,d);
+  for(let t=st;t<t0;t+=st){ const cur=spd(n,d+t);
+    if(prev>=0&&cur<0) return true; prev=cur; }
+  return false;
+}
 const HZ=400;
 /* разбор одного сходящегося аспекта: успеет ли перфектнуться и кто мешает */
 function prohibitionFor(x,d){
@@ -651,17 +673,22 @@ function prohibitionFor(x,d){
      Смена знака сама по себе аспект не отменяет, но допуск ограничен. */
   const t0=perfectIn(A,B,x.ang,d,HZ);
   if(t0===null){
-    if(stationIn(A,d,HZ)||stationIn(B,d,HZ))
+    /* Фроули, с. 174: рефранация — участник становится ретроградным и потому
+       не в состоянии сформировать аспект. Разворот из ретро в директ рефранацией
+       не является: после него планета как раз чаще до аспекта и добирается.
+       Рефранация возможна только там, где перфекции нет вовсе. */
+    const rA=turnsRetro(A,d,HZ), rB=turnsRetro(B,d,HZ);
+    if(rA||rB)
       return {ok:false,kind:"рефранация",
-        note:(stationIn(A,d,HZ)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
+        note:(rA?PRU[A]:PRU[B])+" становится ретроградным раньше, чем аспект завершится — "+
+             "обычно это указывает на то, что человек передумал"};
     return {ok:false,kind:"аспект не состоится",
       note:"до точного аспекта "+degStr(arcTo(A,B,x.ang,d))+
            ", но пара расходится раньше — перфекции нет"};
   }
-  /* рефранация: разворот участника до перфекции */
-  if(stationIn(A,d,t0)||stationIn(B,d,t0))
-    return {ok:false,kind:"рефранация",
-      note:(stationIn(A,d,t0)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
+  /* Перфекция найдена — значит аспект завершается, и рефранации быть не может.
+     Прежняя проверка станции здесь противоречила самой себе: планета могла
+     встать, развернуться и всё равно дойти до точного аспекта. Убрана. */
   /* глубина захода в новый знак на момент перфекции */
   const CROSS_TOL=4;                       // допуск Фроули: 3–4°
   const depth=n=>{ const l0=bodyLon(n,d), l1=bodyLon(n,d+t0);
@@ -693,9 +720,13 @@ function prohibitionFor(x,d){
       for(const [ang2,nm2,gl2] of ASPECTS){
         const tc=perfectIn(C,tg,ang2,d,cap);
         if(tc!==null&&tc>0.001&&tc<t0){
-          /* Фроули, гл. 9: если аспект уводит сам участник (он быстрее) —
-             это фрустрация; если перехватывает третья планета — запрещение */
-          const frus=Math.abs(spd(tg,d))>Math.abs(spd(C,d));
+          /* Фроули, с. 172–173. Запрещение — три случая, и все они про A,
+             аспектирующую: A налетает на C по дороге к B (A быстрее — всё равно
+             запрещение), C опережает A и забирает B, C сама аспектирует A.
+             Фрустрация — единственный случай: к C уходит сама B, аспектируемая.
+             Значит скоростями решается только ветка tg===B; всё, что случается
+             с A, — запрещение независимо от того, кто кого догоняет. */
+          const frus=(tg===B)&&Math.abs(spd(tg,d))>Math.abs(spd(C,d));
           /* Фроули, с. 176: аспекты Луны запрещают редко — только если она
              управляет домом, делающим запрещение осмысленным в контексте.
              Автоматически не засчитываем, показываем как условное. */
@@ -795,7 +826,7 @@ function showAspects(name){
     ph=`<div class="pttitle" style="margin-top:14px">Запрещения</div>`+
        `<div class="tw"><table><thead><tr><th></th><th>Аспект</th><th>Судьба</th></tr></thead><tbody>`+
        rowsH+`</tbody></table></div>`+
-       `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — третья планета завершает свой аспект с одним из участников раньше и перехватывает свет; её дуга может быть и больше, если ход быстрее. Рефранация — участник поворачивает назад до перфекции. Смена знака сама по себе аспект не отменяет: если перфекция приходится на следующий знак, аспект состоится, но по смене обстоятельств — это отмечено отдельной строкой. Аспект не состоится — пара расходится, точного аспекта нет вовсе.</div>`;
+       `<div class="hint">Считаются только сходящиеся аспекты; дуга дана в градусах, единицу времени по Фроули задают знак и дом аспектирующей планеты. Запрещение — помеха приходится на аспектирующую планету: она налетает на третью по дороге, либо третья сама её аспектирует, либо третья опережает её и забирает аспектируемую. Фрустрация — уходит сама аспектируемая: она завершает аспект с третьей планетой раньше. Дуга помехи может быть и больше, если ход быстрее. Рефранация — участник становится ретроградным и потому до перфекции не доходит; обычно означает, что человек передумал. Смена знака сама по себе аспект не отменяет: если перфекция приходится на следующий знак, аспект состоится, но по смене обстоятельств — это отмечено отдельной строкой. Аспект не состоится — пара расходится, точного аспекта нет вовсе.</div>`;
   }
   /* управители градуса по таблице Птолемея */
   const me=CHART.rows.find(r=>r.name===name), pi=PIDX[name];
@@ -1138,11 +1169,17 @@ function build(){
     const dispositor=pi!==undefined?`<div class="pk">диспозитор: ${PN[RUL[Math.floor(r.lon/30)]]}</div>`:"";
     t+=`<tr><td class="g">${PGL[r.name]}</td><td>${PRU[r.name]}${dispositor}</td>`+
        `<td>${fmtName(r.lon)}${r.retro&&r.name!=="Node"?' <span class="rx">R</span>':""}</td>`+
-       `<td>${houseOf(r.lon,c)}</td>`+
+       `<td>${houseOf(r.lon,c)}${(()=>{const pc=porchOf(r.lon,c);
+         return pc?`<div class="pk">${degStr(pc.arc)} до куспида ${RN0[pc.house-1]}, тот же знак</div>`:"";})()}</td>`+
        `<td>${pi===undefined?"—":(r.speed>=0?"+":"")+r.speed.toFixed(2)+"°"}</td>`+
        `<td>${pi===undefined?"—":dgs}${ss?`<div class="${ss.cls}">${ss.k}${ss.note?` <span class="pk">${ss.note}</span>`:""}</div>`:""}</td></tr>`;
   }
   t+=`</tbody></table>`;
+  if(rows.concat(extra).some(r=>porchOf(r.lon,c)))
+    t+=`<div class="hint">Дом указан геометрически. Пометка под номером означает, что планета `+
+       `стоит в последних градусах дома, в одном знаке с куспидом следующего: по Фроули (гл. 3) `+
+       `такая планета относится к следующему дому. Интервал в пять градусов гибкий — при широком `+
+       `доме допуск больше, при узком меньше, поэтому дом не переопределяется автоматически.</div>`;
   document.getElementById("tbl").innerHTML=t;
 
   const asp=[];
@@ -1301,7 +1338,9 @@ function build(){
   for(const r of rows.concat(extra)){
     const pi=PIDX[r.name], dg=dignities(pi,r.lon,dayChart);
     const ss=solarState(r.name,r.lon,sun,r.speed,rows.find(q=>q.name==="Sun").speed);
+    const pc=porchOf(r.lon,c);
     L.push(`${PRU[r.name].padEnd(14)} ${fmtName(r.lon)}${r.retro&&r.name!=="Node"?" R":"  "}  дом ${houseOf(r.lon,c)}`+
+      (pc?` (${degStr(pc.arc)} до куспида ${RN0[pc.house-1]}, тот же знак — по правилу пяти градусов дом ${pc.house})`:"")+
       (pi===undefined?"":`  ${dg.length?dg.map(x=>x[0]).join(", "):"перегрин"}`)+
       (ss?`  · ${ss.k}${ss.note?" ("+ss.note+")":""}`:""));
   }
@@ -1339,6 +1378,8 @@ function build(){
     system:"Regiomontanus", dayChart,
     planets:rows.concat(extra).map(r=>({name:PRU[r.name], lon:r.lon, text:fmtName(r.lon),
       retro:!!r.retro, house:houseOf(r.lon,c), speed:r.speed,
+      porch:(()=>{const pc=porchOf(r.lon,c);
+        return pc?{nextHouse:pc.house, arcToCusp:pc.arc, text:degStr(pc.arc)}:null;})(),
       dignities:(PIDX[r.name]===undefined?[]:dignities(PIDX[r.name],r.lon,dayChart).map(x=>x[0]))})),
     cusps:c.map((l,i)=>({house:i+1, lon:l, text:fmtName(l)})),
     aspects:[],
