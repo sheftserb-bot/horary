@@ -227,6 +227,8 @@ body.shifted #wheel{outline:2px solid var(--oxide);outline-offset:2px}
     <div class="hint">Ось 0° Рака — 0° Козерога. Только соединение и оппозиция, орб до 2°. Достоинства берутся по телесному положению планеты. Со звёздами антисы не взаимодействуют.</div></fieldset>
   <fieldset><legend>Арабские части</legend><div id="parts"></div>
     <div class="hint">Части не отбрасывают аспекты, а получают их. Считайте только ту часть, которая относится к предмету вопроса. В производных картах часть тоже разворачивается.</div></fieldset>
+  <fieldset><legend>Соединения с узлами</legend><div class="tw"><div id="nodes"></div></div>
+    <div class="hint">Узлы — не тела: света не перехватывают, в запрещениях не участвуют, аспектов, кроме соединения, не образуют. Северный усиливает, Южный вредит. Только соединение, только в одном знаке, орб 2°.</div></fieldset>
   <fieldset><legend>Неподвижные звёзды</legend><div class="tw"><div id="stars"></div></div></fieldset>
   <fieldset><legend>Куспиды</legend><div class="cusps" id="cusps"></div></fieldset>
   <div class="stamp" id="stamp"></div>
@@ -350,7 +352,8 @@ const TRIP={fire:[0,4],earth:[3,1],air:[6,2],water:[5,5]}; // день, ночь
    казими 17′, сожжение 8°30′ — оба только в одном знаке с Солнцем;
    под лучами до 17°30′ — знак не важен; оппозиция ±8° */
 function solarState(name,lon,sunLon,speed,sunSpeed){
-  if(name==="Sun") return null;
+  /* узлы — не тела: не сжигаются, под лучами не бывают, казими не бывают */
+  if(name==="Sun"||name==="Node"||name==="SNode") return null;
   const sep=Math.abs(norm(lon-sunLon+180)-180);
   const same=Math.floor(lon/30)===Math.floor(sunLon/30);
   const toward=Math.abs(norm(lon+(speed-sunSpeed)*0.5-sunLon+180)-180)<sep;
@@ -643,8 +646,9 @@ function prohibitionFor(x,d){
   if(!x.applying) return null;
   const A=x.a.name, B=x.b.name;
   const exA=signExit(A,d,HZ), exB=signExit(B,d,HZ);
-  /* Перфекцию ищем по полному горизонту. Смена знака сама по себе аспект
-     не отменяет: значение имеет лишь то, доходит ли пара до точного аспекта. */
+  /* Фроули, гл. 9 (с. 166): аспект указывает на событие, только если завершается
+     в текущем знаке либо не далее 3–4° от начала следующего. Глубже — события нет.
+     Смена знака сама по себе аспект не отменяет, но допуск ограничен. */
   const t0=perfectIn(A,B,x.ang,d,HZ);
   if(t0===null){
     if(stationIn(A,d,HZ)||stationIn(B,d,HZ))
@@ -658,12 +662,26 @@ function prohibitionFor(x,d){
   if(stationIn(A,d,t0)||stationIn(B,d,t0))
     return {ok:false,kind:"рефранация",
       note:(stationIn(A,d,t0)?PRU[A]:PRU[B])+" меняет направление раньше, чем аспект завершится"};
-  /* перфекция за границей текущего знака — аспект действителен,
-     но событие приходит по смене обстоятельств */
-  const crossA=exA<t0, crossB=exB<t0;
+  /* глубина захода в новый знак на момент перфекции */
+  const CROSS_TOL=4;                       // допуск Фроули: 3–4°
+  const depth=n=>{ const l0=bodyLon(n,d), l1=bodyLon(n,d+t0);
+    return Math.floor(l0/30)===Math.floor(l1/30) ? 0 : l1-Math.floor(l1/30)*30; };
+  const dA=depth(A), dB=depth(B), deep=Math.max(dA,dB);
+  if(deep>CROSS_TOL){
+    /* B — аспектируемая (медленная); её выход из знака Фроули (с. 173)
+       прямо называет фрустрацией */
+    const slow=Math.abs(spd(A,d))<Math.abs(spd(B,d))?A:B;
+    const byB=(slow===A?dA:dB)>CROSS_TOL;
+    return {ok:false,kind:byB?"фрустрация по знаку":"аспект не состоится",
+      note:"перфекция только на "+degStr(deep)+" следующего знака — дальше допуска "+
+           CROSS_TOL+"°, события не будет"+
+           (byB?"; "+PRU[slow]+" уходит из знака раньше, чем аспект завершается":"")};
+  }
+  const crossA=dA>0, crossB=dB>0;
   const crossNote=(crossA||crossB)
     ? (crossA&&crossB?PRU[A]+" и "+PRU[B]+" меняют знак":PRU[crossA?A:B]+" меняет знак")+
-      " до перфекции — аспект состоится, но уже в следующем знаке"
+      " до перфекции — аспект в пределах допуска ("+degStr(deep)+" нового знака), "+
+      "событие по смене обстоятельств"
     : null;
   const hits=[];
   for(const C of SEVEN){
@@ -678,18 +696,26 @@ function prohibitionFor(x,d){
           /* Фроули, гл. 9: если аспект уводит сам участник (он быстрее) —
              это фрустрация; если перехватывает третья планета — запрещение */
           const frus=Math.abs(spd(tg,d))>Math.abs(spd(C,d));
-          hits.push({who:C,to:tg,nm:nm2,gl:gl2,t:tc,arc:arcTo(C,tg,ang2,d),frus});
+          /* Фроули, с. 176: аспекты Луны запрещают редко — только если она
+             управляет домом, делающим запрещение осмысленным в контексте.
+             Автоматически не засчитываем, показываем как условное. */
+          hits.push({who:C,to:tg,nm:nm2,gl:gl2,t:tc,arc:arcTo(C,tg,ang2,d),
+                     frus,soft:C==="Moon"});
         }
       }
     }
   }
   hits.sort((p,q)=>p.t-q.t);
-  const seen={}, uniq=hits.filter(h=>{const k=h.who+h.to; if(seen[k])return false; seen[k]=1; return true});
-  const anyPro=uniq.some(h=>!h.frus);
-  return {ok:uniq.length===0,
-          kind:uniq.length?(anyPro?"запрещение":"фрустрация")
+  const seen={}, all=hits.filter(h=>{const k=h.who+h.to; if(seen[k])return false; seen[k]=1; return true});
+  /* Фроули, с. 176: интересует только ближайший аспект, не цепочка.
+     Берём первое препятствие по времени, остальные — справочно. */
+  const hard=all.filter(h=>!h.soft).slice(0,1);
+  const soft=all.filter(h=>h.soft).slice(0,1);
+  const anyPro=hard.some(h=>!h.frus);
+  return {ok:hard.length===0,
+          kind:hard.length?(anyPro?"запрещение":"фрустрация")
                           :(crossNote?"свободен (перфекция в следующем знаке)":"свободен"),
-          t0, arc:arcTo(A,B,x.ang,d), hits:uniq, cross:crossNote};
+          t0, arc:arcTo(A,B,x.ang,d), hits:hard, moon:soft, cross:crossNote};
 }
 /* дуга до перфекции в градусах и минутах — считаем градусы, не часы */
 function degStr(g){
@@ -752,6 +778,11 @@ function showAspects(name){
       } else {
         cls="dig"; verdict="свободен — до перфекции "+degStr(p.arc)+
           (p.cross?"<div class=\"pk\">"+p.cross+"</div>":"");
+      }
+      if(p.moon&&p.moon.length){
+        verdict+="<div class=\"pk\">Луна "+p.moon[0].gl+" "+PRU[p.moon[0].to]+
+          " раньше (осталось "+degStr(p.moon[0].arc)+") — запрещает только если управляет "+
+          "домом, значимым для вопроса</div>";
       }
       pro.push({with:PRU[other.name], type:x.nm, verdict:p.kind,
         perfects: p.arc!==undefined?degStr(p.arc):null,
@@ -1156,6 +1187,34 @@ function build(){
   ct+=`</tbody></table>`;
   document.getElementById("cusp-conj").innerHTML=ct;
 
+  /* узлы — только соединение, в одном знаке, орб 2°; в аспекты и запрещения не идут */
+  const NODE_ORB=2, nd=[];
+  for(const nn of ["Node","SNode"]){
+    const nl=nn==="Node"?node:norm(node+180);
+    for(const r of rows){
+      if(OUTERS.includes(r.name)) continue;
+      const sep=Math.abs(norm(r.lon-nl+180)-180);
+      if(sep<=NODE_ORB&&Math.floor(r.lon/30)===Math.floor(nl/30))
+        nd.push({nn,who:r.name,orb:sep,lon:r.lon});
+    }
+    for(let h=0;h<12;h++){
+      const sep=Math.abs(norm(c[h]-nl+180)-180);
+      if(sep<=NODE_ORB&&Math.floor(c[h]/30)===Math.floor(nl/30))
+        nd.push({nn,who:"куспид "+RN[h],orb:sep,lon:c[h],cusp:true});
+    }
+  }
+  nd.sort((x,y)=>x.orb-y.orb);
+  let ndh=`<table><thead><tr><th></th><th>Соединение</th><th>Орб</th><th>Действие</th></tr></thead><tbody>`;
+  ndh+= nd.length?nd.map(x=>
+    `<tr><td class="g">${PGL[x.nn]}${x.cusp?"":PGL[x.who]}</td>`+
+    `<td>${x.cusp?x.who:PRU[x.who]}<div class="pk">${fmtName(x.lon)} — ${x.nn==="Node"?"Северный узел":"Южный узел"}</div></td>`+
+    `<td>${fmtOrb(x.orb)}<div class="pk">макс. ${NODE_ORB}°</div></td>`+
+    `<td class="${x.nn==="Node"?"dig":"deb"}">${x.nn==="Node"?"усиление":"поражение"}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="pk">Соединений с узлами нет.</td></tr>`;
+  ndh+=`</tbody></table>`;
+  document.getElementById("nodes").innerHTML=ndh;
+  window.__nodes=nd;
+
   /* транссатурновые — по Фроули, как неподвижные звёзды */
   const RN2=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"];
   const tr=[];
@@ -1261,6 +1320,13 @@ function build(){
   L.push("");
   L.push("ПЛАНЕТЫ НА КУСПИДАХ");
   L.push(cj.length?cj.map(x=>`${PRU[x.name]} — куспид ${RN[x.h]}, орб ${fmtOrb(x.orb)}`).join("\n"):"нет");
+  L.push("");
+  L.push("СОЕДИНЕНИЯ С УЗЛАМИ");
+  L.push((window.__nodes&&window.__nodes.length)
+    ? window.__nodes.map(x=>`${x.nn==="Node"?"Северный узел":"Южный узел"} — `+
+        `${x.cusp?x.who:PRU[x.who]} ${fmtName(x.lon)}, орб ${fmtOrb(x.orb)} — `+
+        `${x.nn==="Node"?"усиление":"поражение"}`).join("\n")
+    : "нет");
   L.push("");
   L.push("НЕПОДВИЖНЫЕ ЗВЁЗДЫ");
   L.push(st.length?st.map(x=>`${x.s.n} (${fmtName(x.sl)}) — ${x.who}, орб ${fmtOrb(x.orb)} — ${x.s.m}`).join("\n"):"нет");
