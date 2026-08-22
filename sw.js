@@ -1,4 +1,4 @@
-const CACHE = "horary-v34";
+const CACHE = "horary-v35";
 const FILES = ["./", "./index.html", "./manifest.json", "./icon.svg"];
 
 self.addEventListener("install", e => {

@@ -261,8 +261,10 @@ const PRU={Sun:"Солнце",Moon:"Луна",Mercury:"Меркурий",Venus:"
   Node:"Сев. узел",SNode:"Юж. узел"};
 const MOIETY={Sun:7.5,Moon:6,Mercury:3.5,Venus:3.5,Mars:3.5,Jupiter:4.5,Saturn:4.5,
   Uranus:2.5,Neptune:2.5,Pluto:2.5};
-const ASPECTS=[[0,"соединение","☌"],[60,"секстиль","✳"],[90,"квадратура","□"],
-  [120,"тригон","△"],[180,"оппозиция","☍"]];
+/* U+FE0E — текстовое начертание: без него iPhone рисует ✳ и ☌ цветными эмодзи.
+   Для секстиля взят астрологический знак U+26B9, а не «звёздочка» U+2733. */
+const ASPECTS=[[0,"соединение","☌\uFE0E"],[60,"секстиль","⚹\uFE0E"],[90,"квадратура","□\uFE0E"],
+  [120,"тригон","△\uFE0E"],[180,"оппозиция","☍\uFE0E"]];
 const OUTERS=["Uranus","Neptune","Pluto"];
 const OUTER_ORB=2;
 /* Неподвижные звёзды: долготы на 2010 год, прецессия 1° за 72 года (50″/год) */
@@ -558,8 +560,8 @@ function buildReport(){
       ((x.prohibitions&&x.prohibitions.length)?"\n  запрещения:\n"+x.prohibitions.map(p=>
         `    ${p.type} ${p.with}: `+
         (p.verdict.startsWith("свободен")?`свободен, до перфекции ${p.perfects}`+(p.note?` — ${p.note}`:"")
-         :p.verdict==="запрещение"?`запрещение — ${p.by.join("; ")} (до перфекции ${p.perfects})`
-         :`${p.verdict} — ${p.note}`)).join("\n"):"")).join("\n");
+         :(p.by&&p.by.length)?`${p.verdict} — ${p.by.join("; ")} (до перфекции ${p.perfects})`
+         :`${p.verdict}${p.note?" — "+p.note:""}`)).join("\n"):"")).join("\n");
   }
   if(A.length){
     t+="\n\nАНТИСЫ (рассчитанные)\n";
@@ -799,13 +801,18 @@ function showAspects(name){
       const other=x.a.name===name?x.b:x.a;
       const p=prohibitionFor(x,CHART.d);
       let verdict, cls;
-      if(!p.ok&&p.kind==="запрещение"){
+      if(!p.ok&&p.hits&&p.hits.length){
         cls="deb";
-        verdict="запрещение: "+p.hits.map(h=>
+        const h0=p.hits[0];
+        verdict=p.kind+": "+p.hits.map(h=>
           `${PRU[h.who]} ${h.gl} ${PRU[h.to]}, осталось ${degStr(h.arc)}`).join("; ")+
-          `<div class="pk">до перфекции ${PRU[name]} ${x.gl} ${PRU[other.name]} — ${degStr(p.arc)}</div>`;
+          `<div class="pk">`+
+          (p.kind==="фрустрация"
+            ?`${PRU[h0.to]} успевает завершить свой аспект первой; `
+            :"")+
+          `до перфекции ${PRU[name]} ${x.gl} ${PRU[other.name]} — ${degStr(p.arc)}</div>`;
       } else if(!p.ok){
-        cls="deb"; verdict=p.kind+"<div class=\"pk\">"+p.note+"</div>";
+        cls="deb"; verdict=p.kind+(p.note?"<div class=\"pk\">"+p.note+"</div>":"");
       } else {
         cls="dig"; verdict="свободен — до перфекции "+degStr(p.arc)+
           (p.cross?"<div class=\"pk\">"+p.cross+"</div>":"");
@@ -1260,14 +1267,14 @@ function build(){
     for(const r of rows){
       if(OUTERS.includes(r.name)) continue;
       const sep=Math.abs(norm(ol-r.lon+180)-180);
-      for(const [a,nm,gl] of [[0,"соединение","☌"],[180,"оппозиция","☍"]]){
+      for(const [a,nm,gl] of [[0,"соединение","☌\uFE0E"],[180,"оппозиция","☍\uFE0E"]]){
         const orb=Math.abs(sep-a);
         if(orb<=OUTER_ORB) tr.push({o,gl,nm,who:PRU[r.name],wg:PGL[r.name],orb});
       }
     }
     for(let h=0;h<12;h++){
       const sep=Math.abs(norm(ol-c[h]+180)-180);
-      if(sep<=OUTER_ORB) tr.push({o,gl:"☌",nm:"соединение",who:"куспид "+RN2[h],wg:"·",orb:sep});
+      if(sep<=OUTER_ORB) tr.push({o,gl:"☌\uFE0E",nm:"соединение",who:"куспид "+RN2[h],wg:"·",orb:sep});
     }
   }
   tr.sort((x,y)=>x.orb-y.orb);
