@@ -213,6 +213,8 @@ body.shifted #wheel{outline:2px solid var(--oxide);outline-offset:2px}
       <div id="sc-info" class="hint">Прокрутка выключена — карта на момент вопроса.</div>
     </div>
   </fieldset>
+  <fieldset><legend>Куспиды</legend><div class="cusps" id="cusps"></div>
+    <div class="hint">Дома по Региомонтану, средний наклон эклиптики.</div></fieldset>
   <fieldset><legend>Планеты</legend><div class="tw"><div id="tbl"></div></div>
     <div class="hint">Достоинства по таблице Птолемея: обитель, экзальтация, триплицитет, терм, фас, изгнание, падение. Термы — Птолемея, фасы — халдейские, триплицитет — по дню и ночи.</div></fieldset>
   <fieldset><legend>Луна</legend><div class="tw"><div id="moon"></div></div>
@@ -230,7 +232,6 @@ body.shifted #wheel{outline:2px solid var(--oxide);outline-offset:2px}
   <fieldset><legend>Соединения с узлами</legend><div class="tw"><div id="nodes"></div></div>
     <div class="hint">Узлы — не тела: света не перехватывают, в запрещениях не участвуют, аспектов, кроме соединения, не образуют. Северный усиливает, Южный вредит. Только соединение, только в одном знаке, орб 2°.</div></fieldset>
   <fieldset><legend>Неподвижные звёзды</legend><div class="tw"><div id="stars"></div></div></fieldset>
-  <fieldset><legend>Куспиды</legend><div class="cusps" id="cusps"></div></fieldset>
   <div class="stamp" id="stamp"></div>
   <fieldset id="exp" style="display:none"><legend>Экспорт</legend>
     <label for="rep">Текст карты</label>
@@ -1175,7 +1176,7 @@ function build(){
       :`<span class="pk">перегрин</span>`;
     const dispositor=pi!==undefined?`<div class="pk">диспозитор: ${PN[RUL[Math.floor(r.lon/30)]]}</div>`:"";
     t+=`<tr><td class="g">${PGL[r.name]}</td><td>${PRU[r.name]}${dispositor}</td>`+
-       `<td>${fmtName(r.lon)}${r.retro&&r.name!=="Node"?' <span class="rx">R</span>':""}</td>`+
+       `<td>${fmtName(r.lon)}${r.retro&&r.name!=="Node"&&r.name!=="SNode"?' <span class="rx">R</span>':""}</td>`+
        `<td>${houseOf(r.lon,c)}${(()=>{const pc=porchOf(r.lon,c);
          return pc?`<div class="pk">${degStr(pc.arc)} до куспида ${RN0[pc.house-1]}, тот же знак</div>`:"";})()}</td>`+
        `<td>${pi===undefined?"—":(r.speed>=0?"+":"")+r.speed.toFixed(2)+"°"}</td>`+
@@ -1341,19 +1342,19 @@ function build(){
   L.push(`${locLabel} — ${co.lat.toFixed(4)}, ${co.lon.toFixed(4)}`);
   L.push(`Дома по Региомонтану · ${dayChart?"дневная":"ночная"} карта`);
   L.push("");
+  L.push("КУСПИДЫ");
+  names.forEach((n,i)=>L.push(`${n.padEnd(10)} ${fmtName(c[i])}`));
+  L.push("");
   L.push("ПЛАНЕТЫ");
   for(const r of rows.concat(extra)){
     const pi=PIDX[r.name], dg=dignities(pi,r.lon,dayChart);
     const ss=solarState(r.name,r.lon,sun,r.speed,rows.find(q=>q.name==="Sun").speed);
     const pc=porchOf(r.lon,c);
-    L.push(`${PRU[r.name].padEnd(14)} ${fmtName(r.lon)}${r.retro&&r.name!=="Node"?" R":"  "}  дом ${houseOf(r.lon,c)}`+
+    L.push(`${PRU[r.name].padEnd(14)} ${fmtName(r.lon)}${r.retro&&r.name!=="Node"&&r.name!=="SNode"?" R":"  "}  дом ${houseOf(r.lon,c)}`+
       (pc?` (${degStr(pc.arc)} до куспида ${RN0[pc.house-1]}, тот же знак — по правилу пяти градусов дом ${pc.house})`:"")+
       (pi===undefined?"":`  ${dg.length?dg.map(x=>x[0]).join(", "):"перегрин"}`)+
       (ss?`  · ${ss.k}${ss.note?" ("+ss.note+")":""}`:""));
   }
-  L.push("");
-  L.push("КУСПИДЫ");
-  names.forEach((n,i)=>L.push(`${n.padEnd(10)} ${fmtName(c[i])}`));
   L.push("");
   L.push("ЛУНА");
   L.push(`${fmtName(rows.find(r=>r.name==="Moon").lon)}, дом ${houseOf(rows.find(r=>r.name==="Moon").lon,c)}, ${MR.waxing?"прибывает":"убывает"}`);
